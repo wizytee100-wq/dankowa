@@ -25,7 +25,11 @@ if not st.session_state.logged_in:
                 # Check if user exists in the 'users' table, if not create them
                 response = supabase.table("users").select("*").eq("phone", phone).execute()
                 if not response.data:
-                    supabase.table("users").insert({"phone": phone, "wallet_balance": 0.00}).execute()
+                    supabase.table("users").insert({
+                        "phone": phone, 
+                        "wallet_balance": 0.00,
+                        "referral_bonus": 0.00
+                    }).execute()
                 
                 st.session_state.logged_in = True
                 st.session_state.phone = phone
@@ -38,22 +42,45 @@ else:
     phone = st.session_state.phone
     st.success(f"Logged in as: {phone}")
     
-    # Fetch wallet balance from Supabase 'users' table
+    # Fetch wallet balance and referral rewards from Supabase 'users' table
     try:
-        user_data = supabase.table("users").select("wallet_balance").eq("phone", phone).execute()
-        balance = user_data.data[0]["wallet_balance"] if user_data.data else 0.00
+        user_data = supabase.table("users").select("wallet_balance, referral_bonus").eq("phone", phone).execute()
+        if user_data.data:
+            balance = user_data.data[0].get("wallet_balance", 0.00)
+            ref_bonus = user_data.data[0].get("referral_bonus", 0.00)
+        else:
+            balance = 0.00
+            ref_bonus = 0.00
     except:
         balance = 0.00
+        ref_bonus = 0.00
 
-    # Wallet / Balance Card
+    # Wallet & Rewards Cards
     st.markdown("### Wallet Balance")
     st.info(f"₦{balance:,.2f}")
     
-    if st.button("Fund Wallet (Test Demo)"):
-        new_balance = float(balance) + 1000.00
-        supabase.table("users").update({"wallet_balance": new_balance}).eq("phone", phone).execute()
-        st.success("Successfully added ₦1,000.00 test funds!")
-        st.rerun()
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Fund Wallet (Test Demo)"):
+            new_balance = float(balance) + 1000.00
+            supabase.table("users").update({"wallet_balance": new_balance}).eq("phone", phone).execute()
+            st.success("Added ₦1,000.00!")
+            st.rerun()
+    with col2:
+        if ref_bonus > 0 and st.button("Claim Referral Bonus"):
+            new_balance = float(balance) + float(ref_bonus)
+            supabase.table("users").update({"wallet_balance": new_balance, "referral_bonus": 0.00}).eq("phone", phone).execute()
+            st.success(f"Moved ₦{ref_bonus:,.2f} bonus to your main wallet!")
+            st.rerun()
+
+    # --- REFERRAL REWARDS SECTION ---
+    st.markdown("---")
+    st.markdown("### 🎁 Referral Rewards Program")
+    st.write("Earn **₦100** free reward bonus for every friend who signs up using your phone number as their referral code!")
+    
+    ref_link = f"Share your phone number (**{phone}**) with friends when they log in!"
+    st.info(ref_link)
+    st.write(f"Your Current Unclaimed Rewards: **₦{ref_bonus:,.2f}**")
 
     st.markdown("---")
     st.markdown("### Buy Data & Airtime")
