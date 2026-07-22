@@ -6,19 +6,35 @@ st.set_page_config(page_title="Dankowa Data & Airtime Hub", page_icon="📱", la
 
 # Initialize Session State for Wallet and History
 if "wallet_balance" not in st.session_state:
-    st.session_state.wallet_balance = 5000.00  # Starting bonus balance in ₦
+    st.session_state.wallet_balance = 5000.00  # Starting balance in ₦
 
 if "transactions" not in st.session_state:
     st.session_state.transactions = []
 
-# Sidebar for Wallet Management
+# Sidebar for Wallet Management & Bank Funding
 st.sidebar.title("💰 Wallet Hub")
 st.sidebar.metric(label="Current Balance", value=f"₦{st.session_state.wallet_balance:,.2f}")
 
-funding_amount = st.sidebar.number_input("Fund Wallet (₦)", min_value=100, max_value=50000, step=500)
-if st.sidebar.button("Add Funds"):
+st.sidebar.subheader("Fund Wallet via Bank Transfer")
+funding_amount = st.sidebar.number_input("Enter Amount to Fund (₦)", min_value=500, max_value=50000, step=500)
+user_email = st.sidebar.text_input("Your Email (for receipt)")
+
+# Option 1: Automated Payment Gateway Link (Paystack)
+if st.sidebar.button("Generate Transfer Checkout"):
+    if user_email:
+        # Note: Replace 'pk_test_your_key_here' with your actual Paystack Public Key when ready
+        # For testing, users can complete a simulated transfer via Paystack's secure checkout page.
+        paystack_checkout_url = f"https://checkout.paystack.com/pay?amount={funding_amount * 100}&email={user_email}"
+        st.sidebar.markdown(f"[ 👉 Click Here to Complete Bank Transfer]({paystack_checkout_url})", unsafe_allow_html=True)
+        st.sidebar.info("After successful payment, use the simulation button below to credit your wallet.")
+    else:
+        st.sidebar.error("Please enter your email address first.")
+
+# Simulation helper for testing instantly in your app
+if st.sidebar.button("Simulate Successful Transfer"):
     st.session_state.wallet_balance += funding_amount
-    st.sidebar.success(f"Successfully added ₦{funding_amount:,.2f} to wallet!")
+    st.sidebar.success(f"Wallet credited with ₦{funding_amount:,.2f}!")
+    st.rerun()
 
 # Main App Interface
 st.title("📱 Dankowa Data & Airtime Hub")
@@ -69,7 +85,7 @@ if st.button("Proceed with Transaction"):
             
             st.success(f"Transaction successful! {service_type} sent to {phone_number}.")
         else:
-            st.error("Insufficient wallet funds! Please fund your wallet from the sidebar.")
+            st.error("Insufficient wallet funds! Please fund your wallet via bank transfer from the sidebar.")
     else:
         st.error("Please enter a valid 11-digit phone number.")
 
@@ -85,3 +101,4 @@ if len(st.session_state.transactions) > 0:
             st.markdown("---")
 else:
     st.write("No transactions recorded yet.")
+
