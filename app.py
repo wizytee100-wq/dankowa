@@ -69,10 +69,10 @@ if not st.session_state.logged_in:
                     response = supabase.table("users").select("*").eq("phone", identifier).execute()
                     if response.data:
                         user_record = response.data[0]
-                        stored_pin = user_record.get("pin", "")
+                        stored_pin = str(user_record.get("pin", ""))
                         
-                        # Verify PIN (supports accounts created before PIN was added)
-                        if not stored_pin or stored_pin == pin_input:
+                        # Strict PIN Verification
+                        if stored_pin == pin_input:
                             st.session_state.logged_in = True
                             st.session_state.identifier = identifier
                             st.rerun()
