@@ -12,6 +12,25 @@ st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
 # Page Configuration
 st.set_page_config(page_title="Dankowa Data & Airtime Hub", page_icon="📱", layout="centered")
+# Initialize session state for login
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+    st.session_state.phone_number = ""
+
+if not st.session_state.logged_in:
+    st.markdown("### Welcome to Dankowa Data")
+    st.write("Please enter your phone number to continue.")
+    
+    phone_input = st.text_input("Phone Number", max_chars=11)
+    
+    if st.button("Continue to App"):
+        if phone_input and len(phone_input) >= 10:
+            st.session_state.logged_in = True
+            st.session_state.phone_number = phone_input
+            st.rerun()
+        else:
+            st.error("Please enter a valid phone number.")
+    st.stop()  # Stops the rest of the app from showing until logged in
 
 # Initialize Session State for Wallet and History
 if "wallet_balance" not in st.session_state:
