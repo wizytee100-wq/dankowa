@@ -1,5 +1,14 @@
 import streamlit as st
 import datetime
+hide_streamlit_style = """
+    <style>
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    .stDeployButton {display:none;}
+    </style>
+"""
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
 # Page Configuration
 st.set_page_config(page_title="Dankowa Data & Airtime Hub", page_icon="📱", layout="centered")
