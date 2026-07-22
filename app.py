@@ -9,6 +9,45 @@ hide_streamlit_style = """
     </style>
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+import streamlit as st
+import datetime
+
+# --- 1. HIDE STREAMLIT STYLING ---
+hide_streamlit_style = """
+    <style>
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    .stDeployButton {display:none;}
+    </style>
+"""
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+
+# --- 2. LOGIN CHECK ---
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+    st.session_state.phone_number = ""
+
+if not st.session_state.logged_in:
+    st.markdown("### Welcome to Dankowa Data")
+    st.write("Please enter your phone number to continue.")
+    
+    phone_input = st.text_input("Phone Number", max_chars=11)
+    
+    if st.button("Continue to App"):
+        if phone_input and len(phone_input) >= 10:
+            st.session_state.logged_in = True
+            st.session_state.phone_number = phone_input
+            st.rerun()
+        else:
+            st.error("Please enter a valid phone number.")
+            
+else:
+    # --- 3. YOUR MAIN APP CODE GOES HERE ---
+    # Everything your app does (wallet, data bundles, airtime) goes inside this 'else' section!
+    st.success(f"Logged in as: {st.session_state.phone_number}")
+    
+    # Put your existing dashboard code here...
 
 # Page Configuration
 st.set_page_config(page_title="Dankowa Data & Airtime Hub", page_icon="📱", layout="centered")
