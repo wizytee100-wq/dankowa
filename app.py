@@ -62,14 +62,28 @@ else:
     network = st.selectbox("Select Network", ["MTN", "Glo", "Airtel", "9mobile"])
     
     if choice == "Data Bundle":
-        plan = st.selectbox(
-            "Select Data Plan", 
-            ["1GB - 30 Days (₦300)", "2GB - 30 Days (₦600)", "5GB - 30 Days (₦1,500)"]
-        )
+        # Expanded, cheaper options from MB to GB to TB
+        plan_options = {
+            "100MB - 1 Day (₦50)": 50,
+            "500MB - 7 Days (₦150)": 150,
+            "1GB - 30 Days (₦250)": 250,
+            "2GB - 30 Days (₦500)": 500,
+            "5GB - 30 Days (₦1,200)": 1200,
+            "10GB - 30 Days (₦2,300)": 2300,
+            "20GB - 30 Days (₦4,500)": 4500,
+            "50GB - 30 Days (₦11,000)": 11000,
+            "100GB - 30 Days (₦21,000)": 21000,
+            "1TB - 30 Days (₦180,000)": 180000
+        }
+        
+        selected_plan = st.selectbox("Select Data Plan", list(plan_options.keys()))
+        cost = plan_options[selected_plan]
+        
         recipient = st.text_input("Recipient Phone Number", value=phone)
         
+        st.write(helm := f"Price: **₦{cost:,}**")
+        
         if st.button("Purchase Data"):
-            cost = 300 if "300" in plan else (600 if "600" in plan else 1500)
             if float(balance) >= cost:
                 # Deduct balance and log transaction
                 new_balance = float(balance) - cost
@@ -79,11 +93,11 @@ else:
                     "phone": phone,
                     "service_type": "Data",
                     "network": network,
-                    "details": plan,
+                    "details": selected_plan,
                     "amount": cost
                 }).execute()
                 
-                st.success(f"Successfully ordered {plan} for {recipient} on {network}!")
+                st.success(f"Successfully ordered {selected_plan} for {recipient} on {network}!")
                 st.rerun()
             else:
                 st.error("Insufficient wallet balance. Please fund your wallet.")
