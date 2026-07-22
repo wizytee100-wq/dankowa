@@ -1,0 +1,2 @@
+streamlit
+supabase==2.11.0
