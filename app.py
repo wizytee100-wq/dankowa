@@ -19,74 +19,121 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# Session state initialization for login
+# Session state initialization for login & reset mode
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.identifier = ""
 
+if "reset_mode" not in st.session_state:
+    st.session_state.reset_mode = False
+
 # Authentication Section
 if not st.session_state.logged_in:
-    st.markdown("### 🔐 Secure Sign In & Registration")
-    st.write("Access your wallet and cheap data securely with your PIN.")
     
-    auth_choice = st.selectbox("Identifier Type", ["Phone Number", "Google (Gmail)"])
-    
-    if auth_choice == "Phone Number":
-        identifier_input = st.text_input("Phone Number (e.g. 08012345678)")
-    else:
-        identifier_input = st.text_input("Gmail Address")
+    if not st.session_state.reset_mode:
+        st.markdown("### 🔐 Secure Sign In & Registration")
+        st.write("Access your wallet and cheap data securely with your PIN.")
         
-    pin_input = st.text_input("Enter 4-Digit Security PIN", type="password", max_chars=4)
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        if st.button("Login", use_container_width=True):
-            if identifier_input.strip() and pin_input.strip():
-                identifier = identifier_input.strip()
-                try:
-                    response = supabase.table("users").select("*").eq("phone", identifier).execute()
-                    if response.data:
-                        user_record = response.data[0]
-                        stored_pin = str(user_record.get("pin", ""))
-                        
-                        if stored_pin == pin_input:
+        auth_choice = st.selectbox("Identifier Type", ["Phone Number", "Google (Gmail)"])
+        
+        if auth_choice == "Phone Number":
+            identifier_input = st.text_input("Phone Number (e.g. 08012345678)")
+        else:
+            identifier_input = st.text_input("Gmail Address")
+            
+        pin_input = st.text_input("Enter 4-Digit Security PIN", type="password", max_chars=4)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("Login", use_container_width=True):
+                if identifier_input.strip() and pin_input.strip():
+                    identifier = identifier_input.strip()
+                    try:
+                        response = supabase.table("users").select("*").eq("phone", identifier).execute()
+                        if response.data:
+                            user_record = response.data[0]
+                            stored_pin = str(user_record.get("pin", ""))
+                            
+                            if stored_pin == pin_input:
+                                st.session_state.logged_in = True
+                                st.session_state.identifier = identifier
+                                st.rerun()
+                            else:
+                                st.error("Incorrect 4-Digit PIN. Please try again.")
+                        else:
+                            st.warning("Account not found! Click 'Register New Account' below to create one instantly.")
+                    except Exception as e:
+                        st.error(f"Database error: {e}")
+                else:
+                    st.warning("Please fill in both your identifier and your 4-digit PIN.")
+
+        with col2:
+            if st.button("Register New Account", use_container_width=True):
+                if identifier_input.strip() and len(pin_input) == 4:
+                    identifier = identifier_input.strip()
+                    try:
+                        response = supabase.table("users").select("*").eq("phone", identifier).execute()
+                        if response.data:
+                            st.error("Account already exists! You can log in directly.")
+                        else:
+                            supabase.table("users").insert({
+                                "phone": identifier, 
+                                "wallet_balance": 0.00,
+                                "referral_bonus": 0.00,
+                                "pin": pin_input
+                            }).execute()
+                            st.success("Account created successfully! Logging you in...")
                             st.session_state.logged_in = True
                             st.session_state.identifier = identifier
                             st.rerun()
-                        else:
-                            st.error("Incorrect 4-Digit PIN. Please try again.")
-                    else:
-                        # Automatically guide them if account doesn't exist
-                        st.warning("Account not found! Click 'Register New Account' below to create one instantly.")
-                except Exception as e:
-                    st.error(f"Database error: {e}")
-            else:
-                st.warning("Please fill in both your identifier and your 4-digit PIN.")
+                    except Exception as e:
+                        st.error(f"Database error: {e}")
+                else:
+                    st.warning("Enter your phone/email and a strict 4-digit PIN to register.")
 
-    with col2:
-        if st.button("Register New Account", use_container_width=True):
-            if identifier_input.strip() and len(pin_input) == 4:
-                identifier = identifier_input.strip()
-                try:
-                    response = supabase.table("users").select("*").eq("phone", identifier).execute()
-                    if response.data:
-                        st.error("Account already exists! You can log in directly.")
-                    else:
-                        supabase.table("users").insert({
-                            "phone": identifier, 
-                            "wallet_balance": 0.00,
-                            "referral_bonus": 0.00,
-                            "pin": pin_input
-                        }).execute()
-                        st.success("Account created successfully! Logging you in...")
-                        st.session_state.logged_in = True
-                        st.session_state.identifier = identifier
-                        st.rerun()
-                except Exception as e:
-                    st.error(f"Database error: {e}")
+        st.markdown("---")
+        if st.button("Forgot Your PIN? Click Here to Reset"):
+            st.session_state.reset_mode = True
+            st.rerun()
+
+    else:
+        # --- FORGOT / RESET PIN VIEW ---
+        st.markdown("### 🔄 Reset Your Security PIN")
+        st.write("Enter your registered phone number or Gmail and set a new 4-digit PIN.")
+        
+        reset_choice = st.selectbox("Identifier Type for Reset", ["Phone Number", "Google (Gmail)"])
+        if reset_choice == "Phone Number":
+            reset_identifier = st.text_input("Registered Phone Number")
+        else:
+            reset_identifier = st.text_input("Registered Gmail Address")
+            
+        new_pin = st.text_input("Enter New 4-Digit PIN", type="password", max_chars=4)
+        confirm_pin = st.text_input("Confirm New 4-Digit PIN", type="password", max_chars=4)
+        
+        if st.button("Update PIN Now", use_container_width=True):
+            if reset_identifier.strip() and len(new_pin) == 4:
+                if new_pin == confirm_pin:
+                    try:
+                        response = supabase.table("users").select("*").eq("phone", reset_identifier.strip()).execute()
+                        if response.data:
+                            supabase.table("users").update({"pin": new_pin}).eq("phone", reset_identifier.strip()).execute()
+                            st.success("PIN updated successfully! You can now log in with your new PIN.")
+                            st.session_state.reset_mode = False
+                            st.rerun()
+                        else:
+                            st.error("Account not found with this identifier.")
+                    except Exception as e:
+                        st.error(f"Database error: {e}")
+                else:
+                    st.error("New PINs do not match!")
             else:
-                st.warning("Enter your phone/email and a strict 4-digit PIN to register.")
+                st.warning("Please provide a valid account ID and a strict 4-digit PIN.")
+
+        if st.button("Back to Login"):
+            st.session_state.reset_mode = False
+            st.rerun()
+
 else:
     identifier = st.session_state.identifier
     
