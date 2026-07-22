@@ -1,5 +1,6 @@
 import streamlit as st
 from supabase import create_client
+import time
 
 # Initialize Supabase connection using Streamlit secrets
 url = st.secrets["SUPABASE_URL"]
@@ -42,6 +43,9 @@ else:
     phone = st.session_state.phone
     st.success(f"Logged in as: {phone}")
     
+    # --- FLASH SALE / LUCKY HOUR BANNER ---
+    st.warning("⚡ **FLASH SALE ACTIVE!** Get massive discounts on all 1GB and 2GB plans for the next 2 hours only! Hurry and buy now!")
+
     # Fetch wallet balance and referral rewards from Supabase 'users' table
     try:
         user_data = supabase.table("users").select("wallet_balance, referral_bonus").eq("phone", phone).execute()
@@ -90,14 +94,14 @@ else:
     
     if choice == "Data Bundle":
         plan_options = {
+            "⚡ FLASH DEAL: 1GB - 30 Days (₦200)": 200,
+            "⚡ FLASH DEAL: 2GB - 30 Days (₦400)": 400,
             "50MB - 1 Day (₦30)": 30,
             "100MB - 1 Day (₦50)": 50,
             "200MB - 2 Days (₦80)": 80,
             "500MB - 7 Days (₦150)": 150,
             "750MB - 7 Days (₦200)": 200,
-            "1GB - 30 Days (₦250)": 250,
             "1.5GB - 30 Days (₦380)": 380,
-            "2GB - 30 Days (₦500)": 500,
             "3GB - 30 Days (₦750)": 750,
             "5GB - 30 Days (₦1,200)": 1200,
             "10GB - 30 Days (₦2,300)": 2300,
