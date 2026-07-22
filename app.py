@@ -29,7 +29,6 @@ if not st.session_state.logged_in:
     st.markdown("### 🔐 Secure Sign In & Registration")
     st.write("Access your wallet and cheap data securely with your PIN.")
     
-    auth_mode = st.radio("Choose Action", ["Login to Account", "Create New Account"])
     auth_choice = st.selectbox("Identifier Type", ["Phone Number", "Google (Gmail)"])
     
     if auth_choice == "Phone Number":
@@ -39,29 +38,9 @@ if not st.session_state.logged_in:
         
     pin_input = st.text_input("Enter 4-Digit Security PIN", type="password", max_chars=4)
     
-    if auth_mode == "Create New Account":
-        if st.button("Register Account", use_container_width=True):
-            if identifier_input.strip() and len(pin_input) == 4:
-                identifier = identifier_input.strip()
-                try:
-                    # Check if user already exists
-                    response = supabase.table("users").select("*").eq("phone", identifier).execute()
-                    if response.data:
-                        st.error("Account already exists! Please switch to 'Login to Account'.")
-                    else:
-                        supabase.table("users").insert({
-                            "phone": identifier, 
-                            "wallet_balance": 0.00,
-                            "referral_bonus": 0.00,
-                            "pin": pin_input
-                        }).execute()
-                        st.success("Account created successfully! You can now log in.")
-                except Exception as e:
-                    st.error(f"Database error: {e}")
-            else:
-                st.warning("Please enter a valid identifier and a strict 4-digit PIN.")
-                
-    else: # Login Mode
+    col1, col2 = st.columns(2)
+    
+    with col1:
         if st.button("Login", use_container_width=True):
             if identifier_input.strip() and pin_input.strip():
                 identifier = identifier_input.strip()
@@ -71,7 +50,6 @@ if not st.session_state.logged_in:
                         user_record = response.data[0]
                         stored_pin = str(user_record.get("pin", ""))
                         
-                        # Strict PIN Verification
                         if stored_pin == pin_input:
                             st.session_state.logged_in = True
                             st.session_state.identifier = identifier
@@ -79,11 +57,36 @@ if not st.session_state.logged_in:
                         else:
                             st.error("Incorrect 4-Digit PIN. Please try again.")
                     else:
-                        st.error("Account not found. Please create a new account first.")
+                        # Automatically guide them if account doesn't exist
+                        st.warning("Account not found! Click 'Register New Account' below to create one instantly.")
                 except Exception as e:
                     st.error(f"Database error: {e}")
             else:
                 st.warning("Please fill in both your identifier and your 4-digit PIN.")
+
+    with col2:
+        if st.button("Register New Account", use_container_width=True):
+            if identifier_input.strip() and len(pin_input) == 4:
+                identifier = identifier_input.strip()
+                try:
+                    response = supabase.table("users").select("*").eq("phone", identifier).execute()
+                    if response.data:
+                        st.error("Account already exists! You can log in directly.")
+                    else:
+                        supabase.table("users").insert({
+                            "phone": identifier, 
+                            "wallet_balance": 0.00,
+                            "referral_bonus": 0.00,
+                            "pin": pin_input
+                        }).execute()
+                        st.success("Account created successfully! Logging you in...")
+                        st.session_state.logged_in = True
+                        st.session_state.identifier = identifier
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"Database error: {e}")
+            else:
+                st.warning("Enter your phone/email and a strict 4-digit PIN to register.")
 else:
     identifier = st.session_state.identifier
     
