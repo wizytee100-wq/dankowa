@@ -32,7 +32,7 @@ if not st.session_state.logged_in:
     
     if not st.session_state.reset_mode:
         st.markdown("### 🔐 Secure Sign In & Registration")
-        st.write("Access your wallet and cheap data securely with your PIN.")
+        st.write("Access your portal with your account password.")
         
         auth_choice = st.selectbox("Identifier Type", ["Phone Number", "Google (Gmail)"])
         
@@ -41,36 +41,36 @@ if not st.session_state.logged_in:
         else:
             identifier_input = st.text_input("Gmail Address")
             
-        pin_input = st.text_input("Enter 4-Digit Security PIN", type="password", max_chars=4)
+        password_input = st.text_input("Account Password (Letters & Numbers)", type="password")
         
         col1, col2 = st.columns(2)
         
         with col1:
             if st.button("Login", use_container_width=True):
-                if identifier_input.strip() and pin_input.strip():
+                if identifier_input.strip() and password_input.strip():
                     identifier = identifier_input.strip()
                     try:
                         response = supabase.table("users").select("*").eq("phone", identifier).execute()
                         if response.data:
                             user_record = response.data[0]
-                            stored_pin = str(user_record.get("pin", ""))
+                            stored_pass = str(user_record.get("password", ""))
                             
-                            if stored_pin == pin_input:
+                            if stored_pass == password_input:
                                 st.session_state.logged_in = True
                                 st.session_state.identifier = identifier
                                 st.rerun()
                             else:
-                                st.error("Incorrect 4-Digit PIN. Please try again.")
+                                st.error("Incorrect password. Please try again.")
                         else:
                             st.warning("Account not found! Click 'Register New Account' below to create one instantly.")
                     except Exception as e:
                         st.error(f"Database error: {e}")
                 else:
-                    st.warning("Please fill in both your identifier and your 4-digit PIN.")
+                    st.warning("Please fill in both your identifier and your password.")
 
         with col2:
             if st.button("Register New Account", use_container_width=True):
-                if identifier_input.strip() and len(pin_input) == 4:
+                if identifier_input.strip() and len(password_input) >= 6:
                     identifier = identifier_input.strip()
                     try:
                         response = supabase.table("users").select("*").eq("phone", identifier).execute()
@@ -81,7 +81,8 @@ if not st.session_state.logged_in:
                                 "phone": identifier, 
                                 "wallet_balance": 0.00,
                                 "referral_bonus": 0.00,
-                                "pin": pin_input
+                                "password": password_input,
+                                "pin": "1234" # Default fallback transfer PIN
                             }).execute()
                             st.success("Account created successfully! Logging you in...")
                             st.session_state.logged_in = True
@@ -90,17 +91,17 @@ if not st.session_state.logged_in:
                     except Exception as e:
                         st.error(f"Database error: {e}")
                 else:
-                    st.warning("Enter your phone/email and a strict 4-digit PIN to register.")
+                    st.warning("Password must be at least 6 characters containing letters and numbers.")
 
         st.markdown("---")
-        if st.button("Forgot Your PIN? Click Here to Reset"):
+        if st.button("Forgot Your Password? Click Here to Reset"):
             st.session_state.reset_mode = True
             st.rerun()
 
     else:
-        # --- FORGOT / RESET PIN VIEW ---
-        st.markdown("### 🔄 Reset Your Security PIN")
-        st.write("Enter your registered phone number or Gmail and set a new 4-digit PIN.")
+        # --- FORGOT / RESET PASSWORD VIEW ---
+        st.markdown("### 🔄 Reset Your Account Password")
+        st.write("Enter your registered phone number or Gmail and set a new password.")
         
         reset_choice = st.selectbox("Identifier Type for Reset", ["Phone Number", "Google (Gmail)"])
         if reset_choice == "Phone Number":
@@ -108,17 +109,17 @@ if not st.session_state.logged_in:
         else:
             reset_identifier = st.text_input("Registered Gmail Address")
             
-        new_pin = st.text_input("Enter New 4-Digit PIN", type="password", max_chars=4)
-        confirm_pin = st.text_input("Confirm New 4-Digit PIN", type="password", max_chars=4)
+        new_password = st.text_input("Enter New Password", type="password")
+        confirm_password = st.text_input("Confirm New Password", type="password")
         
-        if st.button("Update PIN Now", use_container_width=True):
-            if reset_identifier.strip() and len(new_pin) == 4:
-                if new_pin == confirm_pin:
+        if st.button("Update Password Now", use_container_width=True):
+            if reset_identifier.strip() and len(new_password) >= 6:
+                if new_password == confirm_password:
                     try:
                         response = supabase.table("users").select("*").eq("phone", reset_identifier.strip()).execute()
                         if response.data:
-                            supabase.table("users").update({"pin": new_pin}).eq("phone", reset_identifier.strip()).execute()
-                            st.success("PIN updated successfully! You can now log in with your new PIN.")
+                            supabase.table("users").update({"password": new_password}).eq("phone", reset_identifier.strip()).execute()
+                            st.success("Password updated successfully! You can now log in.")
                             st.session_state.reset_mode = False
                             st.rerun()
                         else:
@@ -126,9 +127,9 @@ if not st.session_state.logged_in:
                     except Exception as e:
                         st.error(f"Database error: {e}")
                 else:
-                    st.error("New PINs do not match!")
+                    st.error("Passwords do not match!")
             else:
-                st.warning("Please provide a valid account ID and a strict 4-digit PIN.")
+                st.warning("Password must be at least 6 characters.")
 
         if st.button("Back to Login"):
             st.session_state.reset_mode = False
@@ -147,18 +148,21 @@ else:
         </div>
     """, unsafe_allow_html=True)
 
-    # Fetch wallet balance and referral rewards from Supabase
+    # Fetch user details from Supabase
     try:
-        user_data = supabase.table("users").select("wallet_balance, referral_bonus").eq("phone", identifier).execute()
+        user_data = supabase.table("users").select("wallet_balance, referral_bonus, pin").eq("phone", identifier).execute()
         if user_data.data:
             balance = user_data.data[0].get("wallet_balance", 0.00)
             ref_bonus = user_data.data[0].get("referral_bonus", 0.00)
+            user_pin = user_data.data[0].get("pin", "1234")
         else:
             balance = 0.00
             ref_bonus = 0.00
+            user_pin = "1234"
     except:
         balance = 0.00
         ref_bonus = 0.00
+        user_pin = "1234"
 
     # Wallet & Rewards Display Columns
     col_a, col_b = st.columns(2)
@@ -167,6 +171,20 @@ else:
     with col_b:
         st.metric(label="🎁 Unclaimed Rewards", value=f"₦{ref_bonus:,.2f}")
     
+    st.markdown("---")
+
+    # --- SETTINGS / CHANGE TRANSACTION PIN ---
+    with st.expander("⚙️ Security Settings (Change 4-Digit Transfer PIN)"):
+        current_pin_input = st.text_input("Current 4-Digit PIN", type="password", max_chars=4)
+        new_pin_input = st.text_input("New 4-Digit PIN", type="password", max_chars=4)
+        if st.button("Update Transfer PIN"):
+            if current_pin_input == str(user_pin) and len(new_pin_input) == 4:
+                supabase.table("users").update({"pin": new_pin_input}).eq("phone", identifier).execute()
+                st.success("Transfer PIN updated successfully!")
+                st.rerun()
+            else:
+                st.error("Incorrect current PIN or invalid new 4-digit PIN.")
+
     st.markdown("---")
 
     # --- AUTOMATED PAYSTACK FUNDING SECTION ---
@@ -251,10 +269,13 @@ else:
         cost = plan_options[selected_plan]
         
         recipient = st.text_input("Recipient Phone Number", value="")
+        transfer_pin = st.text_input("Enter 4-Digit Transfer PIN", type="password", max_chars=4)
         st.write(f"Price: **₦{cost:,}**")
         
         if st.button("Purchase Data Now", use_container_width=True):
-            if float(balance) >= cost and recipient.strip():
+            if transfer_pin != str(user_pin):
+                st.error("Incorrect 4-Digit Transfer PIN!")
+            elif float(balance) >= cost and recipient.strip():
                 new_balance = float(balance) - cost
                 supabase.table("users").update({"wallet_balance": new_balance}).eq("phone", identifier).execute()
                 
@@ -274,9 +295,12 @@ else:
     else:
         amount = st.number_input("Enter Amount (₦)", min_value=50, step=50)
         recipient = st.text_input("Recipient Phone Number", value="")
+        transfer_pin = st.text_input("Enter 4-Digit Transfer PIN", type="password", max_chars=4)
         
         if st.button("Purchase Airtime Now", use_container_width=True):
-            if float(balance) >= float(amount) and recipient.strip():
+            if transfer_pin != str(user_pin):
+                st.error("Incorrect 4-Digit Transfer PIN!")
+            elif float(balance) >= float(amount) and recipient.strip():
                 new_balance = float(balance) - float(amount)
                 supabase.table("users").update({"wallet_balance": new_balance}).eq("phone", identifier).execute()
                 
