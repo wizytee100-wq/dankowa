@@ -20,27 +20,45 @@ if not st.session_state.logged_in:
     
     if st.button("Continue"):
         if phone_input.strip():
-            st.session_state.logged_in = True
-            st.session_state.phone = phone_input.strip()
-            st.rerun()
+            phone = phone_input.strip()
+            try:
+                # Check if user exists in the 'users' table, if not create them
+                response = supabase.table("users").select("*").eq("phone", phone).execute()
+                if not response.data:
+                    supabase.table("users").insert({"phone": phone, "wallet_balance": 0.00}).execute()
+                
+                st.session_state.logged_in = True
+                st.session_state.phone = phone
+                st.rerun()
+            except Exception as e:
+                st.error(f"Database error: {e}")
         else:
             st.warning("Please enter a valid phone number.")
 else:
-    # Dashboard Section after login
-    st.success(f"Logged in as: {st.session_state.phone}")
+    phone = st.session_state.phone
+    st.success(f"Logged in as: {phone}")
     
-    # Wallet / Balance Card mockup
+    # Fetch wallet balance from Supabase 'users' table
+    try:
+        user_data = supabase.table("users").select("wallet_balance").eq("phone", phone).execute()
+        balance = user_data.data[0]["wallet_balance"] if user_data.data else 0.00
+    except:
+        balance = 0.00
+
+    # Wallet / Balance Card
     st.markdown("### Wallet Balance")
-    st.info("₦0.00")
+    st.info(f"₦{balance:,.2f}")
     
-    if st.button("Fund Wallet"):
-        st.write("Payment gateway integration coming soon.")
+    if st.button("Fund Wallet (Test Demo)"):
+        new_balance = float(balance) + 1000.00
+        supabase.table("users").update({"wallet_balance": new_balance}).eq("phone", phone).execute()
+        st.success("Successfully added ₦1,000.00 test funds!")
+        st.rerun()
 
     st.markdown("---")
     st.markdown("### Buy Data & Airtime")
     
     choice = st.selectbox("Select Service", ["Data Bundle", "Airtime Top-up"])
-    
     network = st.selectbox("Select Network", ["MTN", "Glo", "Airtel", "9mobile"])
     
     if choice == "Data Bundle":
@@ -48,17 +66,49 @@ else:
             "Select Data Plan", 
             ["1GB - 30 Days (₦300)", "2GB - 30 Days (₦600)", "5GB - 30 Days (₦1,500)"]
         )
-        recipient = st.text_input("Recipient Phone Number", value=st.session_state.phone)
+        recipient = st.text_input("Recipient Phone Number", value=phone)
         
         if st.button("Purchase Data"):
-            st.success(f"Successfully ordered {plan} for {recipient} on {network}!")
+            cost = 300 if "300" in plan else (600 if "600" in plan else 1500)
+            if float(balance) >= cost:
+                # Deduct balance and log transaction
+                new_balance = float(balance) - cost
+                supabase.table("users").update({"wallet_balance": new_balance}).eq("phone", phone).execute()
+                
+                supabase.table("transactions").insert({
+                    "phone": phone,
+                    "service_type": "Data",
+                    "network": network,
+                    "details": plan,
+                    "amount": cost
+                }).execute()
+                
+                st.success(f"Successfully ordered {plan} for {recipient} on {network}!")
+                st.rerun()
+            else:
+                st.error("Insufficient wallet balance. Please fund your wallet.")
             
     else:
         amount = st.number_input("Enter Amount (₦)", min_value=50, step=50)
-        recipient = st.text_input("Recipient Phone Number", value=st.session_state.phone)
+        recipient = st.text_input("Recipient Phone Number", value=phone)
         
         if st.button("Purchase Airtime"):
-            st.success(f"Successfully sent ₦{amount} airtime to {recipient} on {network}!")
+            if float(balance) >= amount:
+                new_balance = float(balance) - float(amount)
+                supabase.table("users").update({"wallet_balance": new_balance}).eq("phone", phone).execute()
+                
+                supabase.table("transactions").insert({
+                    "phone": phone,
+                    "service_type": "Airtime",
+                    "network": network,
+                    "details": f"₦{amount} Airtime",
+                    "amount": amount
+                }).execute()
+                
+                st.success(f"Successfully sent ₦{amount} airtime to {recipient} on {network}!")
+                st.rerun()
+            else:
+                st.error("Insufficient wallet balance. Please fund your wallet.")
 
     st.markdown("---")
     if st.button("Log Out"):
