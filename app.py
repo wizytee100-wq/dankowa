@@ -23,60 +23,67 @@ st.markdown("""
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.identifier = ""
-    st.session_state.login_type = "Phone"
 
 # Authentication Section
 if not st.session_state.logged_in:
-    st.markdown("### 🔐 Secure Sign In")
-    st.write("Sign in or register instantly to access cheap data & airtime packages.")
+    st.markdown("### 🔐 Secure Sign In & Registration")
+    st.write("Access your wallet and cheap data securely with your PIN.")
     
-    auth_choice = st.radio("Choose Login Method", ["Phone Number", "Google (Gmail)"])
+    auth_mode = st.radio("Choose Action", ["Login to Account", "Create New Account"])
+    auth_choice = st.selectbox("Identifier Type", ["Phone Number", "Google (Gmail)"])
     
     if auth_choice == "Phone Number":
-        phone_input = st.text_input("Phone Number (e.g. 08012345678)")
-        if st.button("Continue with Phone", use_container_width=True):
-            if phone_input.strip():
-                phone = phone_input.strip()
-                try:
-                    response = supabase.table("users").select("*").eq("phone", phone).execute()
-                    if not response.data:
-                        supabase.table("users").insert({
-                            "phone": phone, 
-                            "wallet_balance": 0.00,
-                            "referral_bonus": 0.00
-                        }).execute()
-                    
-                    st.session_state.logged_in = True
-                    st.session_state.identifier = phone
-                    st.session_state.login_type = "Phone"
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Database error: {e}")
-            else:
-                st.warning("Please enter a valid phone number.")
-                
+        identifier_input = st.text_input("Phone Number (e.g. 08012345678)")
     else:
-        gmail_input = st.text_input("Enter your Gmail Address")
-        if st.button("Sign in with Google", use_container_width=True):
-            if gmail_input.strip() and "@" in gmail_input:
-                email = gmail_input.strip()
+        identifier_input = st.text_input("Gmail Address")
+        
+    pin_input = st.text_input("Enter 4-Digit Security PIN", type="password", max_chars=4)
+    
+    if auth_mode == "Create New Account":
+        if st.button("Register Account", use_container_width=True):
+            if identifier_input.strip() and len(pin_input) == 4:
+                identifier = identifier_input.strip()
                 try:
-                    response = supabase.table("users").select("*").eq("phone", email).execute()
-                    if not response.data:
+                    # Check if user already exists
+                    response = supabase.table("users").select("*").eq("phone", identifier).execute()
+                    if response.data:
+                        st.error("Account already exists! Please switch to 'Login to Account'.")
+                    else:
                         supabase.table("users").insert({
-                            "phone": email, 
+                            "phone": identifier, 
                             "wallet_balance": 0.00,
-                            "referral_bonus": 0.00
+                            "referral_bonus": 0.00,
+                            "pin": pin_input
                         }).execute()
-                    
-                    st.session_state.logged_in = True
-                    st.session_state.identifier = email
-                    st.session_state.login_type = "Google"
-                    st.rerun()
+                        st.success("Account created successfully! You can now log in.")
                 except Exception as e:
                     st.error(f"Database error: {e}")
             else:
-                st.warning("Please enter a valid Gmail address.")
+                st.warning("Please enter a valid identifier and a strict 4-digit PIN.")
+                
+    else: # Login Mode
+        if st.button("Login", use_container_width=True):
+            if identifier_input.strip() and pin_input.strip():
+                identifier = identifier_input.strip()
+                try:
+                    response = supabase.table("users").select("*").eq("phone", identifier).execute()
+                    if response.data:
+                        user_record = response.data[0]
+                        stored_pin = user_record.get("pin", "")
+                        
+                        # Verify PIN (supports accounts created before PIN was added)
+                        if not stored_pin or stored_pin == pin_input:
+                            st.session_state.logged_in = True
+                            st.session_state.identifier = identifier
+                            st.rerun()
+                        else:
+                            st.error("Incorrect 4-Digit PIN. Please try again.")
+                    else:
+                        st.error("Account not found. Please create a new account first.")
+                except Exception as e:
+                    st.error(f"Database error: {e}")
+            else:
+                st.warning("Please fill in both your identifier and your 4-digit PIN.")
 else:
     identifier = st.session_state.identifier
     
