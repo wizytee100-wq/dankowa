@@ -19,121 +19,85 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# Session state initialization for login & reset mode
+# Session state initialization for login
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.identifier = ""
 
-if "reset_mode" not in st.session_state:
-    st.session_state.reset_mode = False
-
 # Authentication Section
 if not st.session_state.logged_in:
+    st.markdown("### 🔐 Secure Sign In & Registration")
+    st.write("Enter your phone number or Gmail and password to continue.")
     
-    if not st.session_state.reset_mode:
-        st.markdown("### 🔐 Secure Sign In & Registration")
-        st.write("Access your portal with your account password.")
+    auth_choice = st.selectbox("Identifier Type", ["Phone Number", "Google (Gmail)"])
+    
+    if auth_choice == "Phone Number":
+        identifier_input = st.text_input("Phone Number (e.g. 08012345678)")
+    else:
+        identifier_input = st.text_input("Gmail Address")
         
-        auth_choice = st.selectbox("Identifier Type", ["Phone Number", "Google (Gmail)"])
-        
-        if auth_choice == "Phone Number":
-            identifier_input = st.text_input("Phone Number (e.g. 08012345678)")
-        else:
-            identifier_input = st.text_input("Gmail Address")
-            
-        password_input = st.text_input("Account Password (Letters & Numbers)", type="password")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if st.button("Login", use_container_width=True):
-                if identifier_input.strip() and password_input.strip():
-                    identifier = identifier_input.strip()
-                    try:
-                        response = supabase.table("users").select("*").eq("phone", identifier).execute()
-                        if response.data:
-                            user_record = response.data[0]
-                            stored_pass = str(user_record.get("password", ""))
-                            
-                            if stored_pass == password_input:
-                                st.session_state.logged_in = True
-                                st.session_state.identifier = identifier
-                                st.rerun()
-                            else:
-                                st.error("Incorrect password. Please try again.")
-                        else:
-                            st.warning("Account not found! Click 'Register New Account' below to create one instantly.")
-                    except Exception as e:
-                        st.error(f"Database error: {e}")
-                else:
-                    st.warning("Please fill in both your identifier and your password.")
-
-        with col2:
-            if st.button("Register New Account", use_container_width=True):
-                if identifier_input.strip() and len(password_input) >= 6:
-                    identifier = identifier_input.strip()
-                    try:
-                        response = supabase.table("users").select("*").eq("phone", identifier).execute()
-                        if response.data:
-                            st.error("Account already exists! You can log in directly.")
-                        else:
-                            supabase.table("users").insert({
-                                "phone": identifier, 
-                                "wallet_balance": 0.00,
-                                "referral_bonus": 0.00,
-                                "password": password_input,
-                                "pin": "1234" # Default fallback transfer PIN
-                            }).execute()
-                            st.success("Account created successfully! Logging you in...")
+    password_input = st.text_input("Account Password", type="password")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("Login", use_container_width=True):
+            if identifier_input.strip() and password_input.strip():
+                identifier = identifier_input.strip()
+                try:
+                    response = supabase.table("users").select("*").eq("phone", identifier).execute()
+                    if response.data:
+                        user_record = response.data[0]
+                        stored_pass = str(user_record.get("password", ""))
+                        
+                        # If account has no password yet (legacy), set this password automatically
+                        if not stored_pass or stored_pass == "None":
+                            supabase.table("users").update({"password": password_input}).eq("phone", identifier).execute()
                             st.session_state.logged_in = True
                             st.session_state.identifier = identifier
                             st.rerun()
-                    except Exception as e:
-                        st.error(f"Database error: {e}")
-                else:
-                    st.warning("Password must be at least 6 characters containing letters and numbers.")
-
-        st.markdown("---")
-        if st.button("Forgot Your Password? Click Here to Reset"):
-            st.session_state.reset_mode = True
-            st.rerun()
-
-    else:
-        # --- FORGOT / RESET PASSWORD VIEW ---
-        st.markdown("### 🔄 Reset Your Account Password")
-        st.write("Enter your registered phone number or Gmail and set a new password.")
-        
-        reset_choice = st.selectbox("Identifier Type for Reset", ["Phone Number", "Google (Gmail)"])
-        if reset_choice == "Phone Number":
-            reset_identifier = st.text_input("Registered Phone Number")
-        else:
-            reset_identifier = st.text_input("Registered Gmail Address")
-            
-        new_password = st.text_input("Enter New Password", type="password")
-        confirm_password = st.text_input("Confirm New Password", type="password")
-        
-        if st.button("Update Password Now", use_container_width=True):
-            if reset_identifier.strip() and len(new_password) >= 6:
-                if new_password == confirm_password:
-                    try:
-                        response = supabase.table("users").select("*").eq("phone", reset_identifier.strip()).execute()
-                        if response.data:
-                            supabase.table("users").update({"password": new_password}).eq("phone", reset_identifier.strip()).execute()
-                            st.success("Password updated successfully! You can now log in.")
-                            st.session_state.reset_mode = False
+                        elif stored_pass == password_input:
+                            st.session_state.logged_in = True
+                            st.session_state.identifier = identifier
                             st.rerun()
                         else:
-                            st.error("Account not found with this identifier.")
-                    except Exception as e:
-                        st.error(f"Database error: {e}")
-                else:
-                    st.error("Passwords do not match!")
+                            st.error("Incorrect password. Please try again.")
+                    else:
+                        # Auto-register if account doesn't exist so user never gets stuck
+                        supabase.table("users").insert({
+                            "phone": identifier, 
+                            "wallet_balance": 0.00,
+                            "referral_bonus": 0.00,
+                            "password": password_input,
+                            "pin": "1234"
+                        }).execute()
+                        st.success("New account created and logged in automatically!")
+                        st.session_state.logged_in = True
+                        st.session_state.identifier = identifier
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"Database error: {e}")
             else:
-                st.warning("Password must be at least 6 characters.")
+                st.warning("Please fill in both your identifier and your password.")
 
-        if st.button("Back to Login"):
-            st.session_state.reset_mode = False
-            st.rerun()
+    with col2:
+        if st.button("Reset Password", use_container_width=True):
+            if identifier_input.strip() and password_input.strip():
+                identifier = identifier_input.strip()
+                try:
+                    response = supabase.table("users").select("*").eq("phone", identifier).execute()
+                    if response.data:
+                        supabase.table("users").update({"password": password_input}).eq("phone", identifier).execute()
+                        st.success("Password updated successfully! Logging you in...")
+                        st.session_state.logged_in = True
+                        st.session_state.identifier = identifier
+                        st.rerun()
+                    else:
+                        st.error("Account not found with this identifier. Click Login to create one.")
+                except Exception as e:
+                    st.error(f"Database error: {e}")
+            else:
+                st.warning("Enter your identifier and the new password you want to set.")
 
 else:
     identifier = st.session_state.identifier
