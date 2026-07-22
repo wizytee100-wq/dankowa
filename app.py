@@ -8,7 +8,16 @@ key = st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 PAYSTACK_SECRET_KEY = st.secrets.get("PAYSTACK_SECRET_KEY", "")
 
-st.title("Welcome to Dankowa Data")
+# Page Configuration for a professional look
+st.set_page_config(page_title="Dankowa Data Portal", page_icon="⚡", layout="centered")
+
+# App Header Banner
+st.markdown("""
+    <div style='background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); padding: 25px; border-radius: 12px; color: white; text-align: center; margin-bottom: 20px;'>
+        <h1 style='margin: 0; font-size: 28px;'>⚡ Dankowa Data Hub</h1>
+        <p style='margin: 5px 0 0 0; font-size: 16px;'>Instant Cheap Data, Airtime & Automated Services</p>
+    </div>
+""", unsafe_allow_html=True)
 
 # Session state initialization for login
 if "logged_in" not in st.session_state:
@@ -18,13 +27,14 @@ if "logged_in" not in st.session_state:
 
 # Authentication Section
 if not st.session_state.logged_in:
-    st.write("Sign in or register instantly to access cheap data & airtime.")
+    st.markdown("### 🔐 Secure Sign In")
+    st.write("Sign in or register instantly to access cheap data & airtime packages.")
     
     auth_choice = st.radio("Choose Login Method", ["Phone Number", "Google (Gmail)"])
     
     if auth_choice == "Phone Number":
-        phone_input = st.text_input("Phone Number")
-        if st.button("Continue with Phone"):
+        phone_input = st.text_input("Phone Number (e.g. 08012345678)")
+        if st.button("Continue with Phone", use_container_width=True):
             if phone_input.strip():
                 phone = phone_input.strip()
                 try:
@@ -47,7 +57,7 @@ if not st.session_state.logged_in:
                 
     else:
         gmail_input = st.text_input("Enter your Gmail Address")
-        if st.button("Sign in with Google"):
+        if st.button("Sign in with Google", use_container_width=True):
             if gmail_input.strip() and "@" in gmail_input:
                 email = gmail_input.strip()
                 try:
@@ -69,10 +79,16 @@ if not st.session_state.logged_in:
                 st.warning("Please enter a valid Gmail address.")
 else:
     identifier = st.session_state.identifier
-    st.success(f"Logged in as: {identifier}")
+    
+    # User Profile Welcome Banner
+    st.success(f"👤 Logged in as: **{identifier}**")
     
     # --- FLASH SALE / LUCKY HOUR BANNER ---
-    st.warning("⚡ **FLASH SALE ACTIVE!** Get massive discounts on all 1GB and 2GB plans for the next 2 hours only! Hurry and buy now!")
+    st.markdown("""
+        <div style='background-color: #ff4b4b; padding: 12px; border-radius: 8px; color: white; text-align: center; font-weight: bold; margin-bottom: 20px;'>
+            🔥 FLASH SALE ACTIVE: Get massive discounts on 1GB and 2GB plans today! 🚀
+        </div>
+    """, unsafe_allow_html=True)
 
     # Fetch wallet balance and referral rewards from Supabase
     try:
@@ -87,63 +103,46 @@ else:
         balance = 0.00
         ref_bonus = 0.00
 
-    # Wallet & Rewards Cards
-    st.markdown("### Wallet Balance")
-    st.info(f"₦{balance:,.2f}")
+    # Wallet & Rewards Display Columns
+    col_a, col_b = st.columns(2)
+    with col_a:
+        st.metric(label="💰 Wallet Balance", value=f"₦{balance:,.2f}")
+    with col_b:
+        st.metric(label="🎁 Unclaimed Rewards", value=f"₦{ref_bonus:,.2f}")
     
-    # --- FUNDING METHODS (PAYSTACK + MANUAL BANK TRANSFER) ---
-    st.markdown("### Fund Your Wallet")
-    funding_method = st.selectbox("Choose Funding Method", ["Paystack (ATM Card / Online)", "Bank Transfer (OPay / Direct Transfer)"])
+    st.markdown("---")
+
+    # --- AUTOMATED PAYSTACK FUNDING SECTION ---
+    st.markdown("### 💳 Fund Your Wallet")
+    fund_amount = st.number_input("Enter Amount to Fund (₦)", min_value=100, step=100, value=1000)
+    user_email = st.text_input("Enter Email for Receipt", value=identifier if "@" in identifier else f"{identifier}@dankowa.com")
     
-    if funding_method == "Paystack (ATM Card / Online)":
-        fund_amount = st.number_input("Enter Amount to Fund (₦)", min_value=100, step=100, value=1000)
-        user_email = st.text_input("Enter Email for Receipt", value=identifier if "@" in identifier else f"{identifier}@dankowa.com")
-        
-        if st.button("Proceed to Pay with Paystack"):
-            if PAYSTACK_SECRET_KEY:
-                headers = {
-                    "Authorization": f"Bearer {PAYSTACK_SECRET_KEY}",
-                    "Content-Type": "application/json"
-                }
-                data = {
-                    "email": user_email,
-                    "amount": int(fund_amount * 100),
-                    "callback_url": "https://dankowa.streamlit.app"
-                }
-                try:
-                    res = requests.post("https://api.paystack.co/transaction/initialize", json=data, headers=headers)
-                    res_data = res.json()
-                    if res_data.get("status"):
-                        auth_url = res_data["data"]["authorization_url"]
-                        st.markdown(f"👉 **[Click Here to Complete Secure Payment]({auth_url})**", unsafe_allow_html=True)
-                    else:
-                        st.error("Could not initialize payment gateway.")
-                except Exception as ex:
-                    st.error(f"Connection error: {ex}")
-            else:
-                st.warning("Paystack Secret Key is missing in Streamlit secrets.")
-    else:
-        st.info("💡 **Instructions:** Make a transfer to the account details below, then click the confirmation button once sent.")
-        st.markdown("""
-        * **Bank Name:** OPay (or Moniepoint)
-        * **Account Number:** `1234567890` *(Replace with your actual account number)*
-        * **Account Name:** Dankowa Data Services
-        """)
-        
-        transfer_amount = st.number_input("Enter Amount Transferred (₦)", min_value=100, step=100, value=1000)
-        if st.button("I Have Made the Transfer"):
-            # Logs a pending transaction or notifies you
-            supabase.table("transactions").insert({
-                "phone": identifier,
-                "service_type": "Wallet Funding",
-                "network": "Bank Transfer",
-                "details": f"Manual Transfer of ₦{transfer_amount} (Pending Confirmation)",
-                "amount": transfer_amount
-            }).execute()
-            st.success("Transfer notification submitted! Your wallet will be credited shortly after confirmation.")
+    if st.button("Proceed to Pay with Paystack", use_container_width=True):
+        if PAYSTACK_SECRET_KEY:
+            headers = {
+                "Authorization": f"Bearer {PAYSTACK_SECRET_KEY}",
+                "Content-Type": "application/json"
+            }
+            data = {
+                "email": user_email,
+                "amount": int(fund_amount * 100),
+                "callback_url": "https://dankowa.streamlit.app"
+            }
+            try:
+                res = requests.post("https://api.paystack.co/transaction/initialize", json=data, headers=headers)
+                res_data = res.json()
+                if res_data.get("status"):
+                    auth_url = res_data["data"]["authorization_url"]
+                    st.markdown(f"👉 **[Click Here to Complete Secure Payment]({auth_url})**", unsafe_allow_html=True)
+                else:
+                    st.error("Could not initialize payment gateway.")
+            except Exception as ex:
+                st.error(f"Connection error: {ex}")
+        else:
+            st.warning("Paystack Secret Key is missing in Streamlit secrets.")
 
     if ref_bonus > 0:
-        if st.button("Claim Referral Bonus"):
+        if st.button("Claim Referral Bonus to Wallet", use_container_width=True):
             new_balance = float(balance) + float(ref_bonus)
             supabase.table("users").update({"wallet_balance": new_balance, "referral_bonus": 0.00}).eq("phone", identifier).execute()
             st.success(f"Moved ₦{ref_bonus:,.2f} bonus to your main wallet!")
@@ -152,12 +151,10 @@ else:
     # --- REFERRAL REWARDS SECTION ---
     st.markdown("---")
     st.markdown("### 🎁 Referral Rewards Program")
-    st.write("Earn **₦100** free reward bonus for every friend who signs up using your account ID as their referral code!")
-    st.info(f"Share your account ID (**{identifier}**) with friends when they sign up!")
-    st.write(f"Your Current Unclaimed Rewards: **₦{ref_bonus:,.2f}**")
+    st.info(f"Share your account identifier (**{identifier}**) with friends! Earn **₦100** free reward bonus for every friend who joins.")
 
     st.markdown("---")
-    st.markdown("### Buy Data & Airtime")
+    st.markdown("### 🛒 Buy Data & Airtime")
     
     choice = st.selectbox("Select Service", ["Data Bundle", "Airtime Top-up"])
     network = st.selectbox("Select Network", ["MTN", "Glo", "Airtel", "9mobile"])
@@ -199,7 +196,7 @@ else:
         recipient = st.text_input("Recipient Phone Number", value="")
         st.write(f"Price: **₦{cost:,}**")
         
-        if st.button("Purchase Data"):
+        if st.button("Purchase Data Now", use_container_width=True):
             if float(balance) >= cost and recipient.strip():
                 new_balance = float(balance) - cost
                 supabase.table("users").update({"wallet_balance": new_balance}).eq("phone", identifier).execute()
@@ -221,7 +218,7 @@ else:
         amount = st.number_input("Enter Amount (₦)", min_value=50, step=50)
         recipient = st.text_input("Recipient Phone Number", value="")
         
-        if st.button("Purchase Airtime"):
+        if st.button("Purchase Airtime Now", use_container_width=True):
             if float(balance) >= float(amount) and recipient.strip():
                 new_balance = float(balance) - float(amount)
                 supabase.table("users").update({"wallet_balance": new_balance}).eq("phone", identifier).execute()
@@ -241,7 +238,7 @@ else:
 
     # --- TRANSACTION HISTORY SECTION ---
     st.markdown("---")
-    st.markdown("### Recent Transactions")
+    st.markdown("### 📜 Recent Transactions")
     try:
         tx_response = supabase.table("transactions").select("*").eq("phone", identifier).order("created_at", desc=True).limit(10).execute()
         if tx_response.data:
@@ -253,7 +250,7 @@ else:
         st.write("Could not load transaction history.")
 
     st.markdown("---")
-    if st.button("Log Out"):
+    if st.button("Log Out", use_container_width=True):
         st.session_state.logged_in = False
         st.session_state.identifier = ""
         st.rerun()
