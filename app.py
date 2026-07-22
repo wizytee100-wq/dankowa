@@ -62,18 +62,35 @@ else:
     network = st.selectbox("Select Network", ["MTN", "Glo", "Airtel", "9mobile"])
     
     if choice == "Data Bundle":
-        # Expanded, cheaper options from MB to GB to TB
+        # Comprehensive, massive tier of plans from tiny MBs to Unlimited TBs
         plan_options = {
+            "50MB - 1 Day (₦30)": 30,
             "100MB - 1 Day (₦50)": 50,
+            "200MB - 2 Days (₦80)": 80,
             "500MB - 7 Days (₦150)": 150,
+            "750MB - 7 Days (₦200)": 200,
             "1GB - 30 Days (₦250)": 250,
+            "1.5GB - 30 Days (₦380)": 380,
             "2GB - 30 Days (₦500)": 500,
+            "3GB - 30 Days (₦750)": 750,
             "5GB - 30 Days (₦1,200)": 1200,
             "10GB - 30 Days (₦2,300)": 2300,
+            "15GB - 30 Days (₦3,400)": 3400,
             "20GB - 30 Days (₦4,500)": 4500,
+            "30GB - 30 Days (₦6,700)": 6700,
+            "40GB - 30 Days (₦8,900)": 8900,
             "50GB - 30 Days (₦11,000)": 11000,
+            "75GB - 30 Days (₦16,000)": 16000,
             "100GB - 30 Days (₦21,000)": 21000,
-            "1TB - 30 Days (₦180,000)": 180000
+            "150GB - 30 Days (₦31,000)": 31000,
+            "200GB - 30 Days (₦40,000)": 40000,
+            "300GB - 30 Days (₦58,000)": 58000,
+            "500GB - 30 Days (₦95,000)": 95000,
+            "1TB (1000GB) - 30 Days (₦180,000)": 180000,
+            "2TB - 30 Days (₦340,000)": 340000,
+            "5TB - 30 Days (₦800,000)": 800000,
+            "UNLIMITED Data - 30 Days (Standard Speed) (₦25,000)": 25000,
+            "UNLIMITED Data - 30 Days (High Speed / 5G) (₦50,000)": 50000
         }
         
         selected_plan = st.selectbox("Select Data Plan", list(plan_options.keys()))
@@ -81,7 +98,7 @@ else:
         
         recipient = st.text_input("Recipient Phone Number", value=phone)
         
-        st.write(helm := f"Price: **₦{cost:,}**")
+        st.write(f"Price: **₦{cost:,}**")
         
         if st.button("Purchase Data"):
             if float(balance) >= cost:
