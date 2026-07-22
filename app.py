@@ -51,7 +51,6 @@ if not st.session_state.logged_in:
             if gmail_input.strip() and "@" in gmail_input:
                 email = gmail_input.strip()
                 try:
-                    # Check if user exists by email, if not create them using email as identifier
                     response = supabase.table("users").select("*").eq("phone", email).execute()
                     if not response.data:
                         supabase.table("users").insert({
@@ -92,13 +91,14 @@ else:
     st.markdown("### Wallet Balance")
     st.info(f"₦{balance:,.2f}")
     
-    # --- AUTOMATED PAYSTACK FUNDING SECTION ---
+    # --- FUNDING METHODS (PAYSTACK + MANUAL BANK TRANSFER) ---
     st.markdown("### Fund Your Wallet")
-    fund_amount = st.number_input("Enter Amount to Fund (₦)", min_value=100, step=100, value=1000)
-    user_email = st.text_input("Enter Email for Receipt", value=identifier if "@" in identifier else f"{identifier}@dankowa.com")
+    funding_method = st.selectbox("Choose Funding Method", ["Paystack (ATM Card / Online)", "Bank Transfer (OPay / Direct Transfer)"])
     
-    col1, col2 = st.columns(2)
-    with col1:
+    if funding_method == "Paystack (ATM Card / Online)":
+        fund_amount = st.number_input("Enter Amount to Fund (₦)", min_value=100, step=100, value=1000)
+        user_email = st.text_input("Enter Email for Receipt", value=identifier if "@" in identifier else f"{identifier}@dankowa.com")
+        
         if st.button("Proceed to Pay with Paystack"):
             if PAYSTACK_SECRET_KEY:
                 headers = {
@@ -122,9 +122,28 @@ else:
                     st.error(f"Connection error: {ex}")
             else:
                 st.warning("Paystack Secret Key is missing in Streamlit secrets.")
-                
-    with col2:
-        if ref_bonus > 0 and st.button("Claim Referral Bonus"):
+    else:
+        st.info("💡 **Instructions:** Make a transfer to the account details below, then click the confirmation button once sent.")
+        st.markdown("""
+        * **Bank Name:** OPay (or Moniepoint)
+        * **Account Number:** `1234567890` *(Replace with your actual account number)*
+        * **Account Name:** Dankowa Data Services
+        """)
+        
+        transfer_amount = st.number_input("Enter Amount Transferred (₦)", min_value=100, step=100, value=1000)
+        if st.button("I Have Made the Transfer"):
+            # Logs a pending transaction or notifies you
+            supabase.table("transactions").insert({
+                "phone": identifier,
+                "service_type": "Wallet Funding",
+                "network": "Bank Transfer",
+                "details": f"Manual Transfer of ₦{transfer_amount} (Pending Confirmation)",
+                "amount": transfer_amount
+            }).execute()
+            st.success("Transfer notification submitted! Your wallet will be credited shortly after confirmation.")
+
+    if ref_bonus > 0:
+        if st.button("Claim Referral Bonus"):
             new_balance = float(balance) + float(ref_bonus)
             supabase.table("users").update({"wallet_balance": new_balance, "referral_bonus": 0.00}).eq("phone", identifier).execute()
             st.success(f"Moved ₦{ref_bonus:,.2f} bonus to your main wallet!")
