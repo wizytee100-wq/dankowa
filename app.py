@@ -62,7 +62,6 @@ else:
     network = st.selectbox("Select Network", ["MTN", "Glo", "Airtel", "9mobile"])
     
     if choice == "Data Bundle":
-        # Comprehensive, massive tier of plans from tiny MBs to Unlimited TBs
         plan_options = {
             "50MB - 1 Day (₦30)": 30,
             "100MB - 1 Day (₦50)": 50,
@@ -97,12 +96,10 @@ else:
         cost = plan_options[selected_plan]
         
         recipient = st.text_input("Recipient Phone Number", value=phone)
-        
         st.write(f"Price: **₦{cost:,}**")
         
         if st.button("Purchase Data"):
             if float(balance) >= cost:
-                # Deduct balance and log transaction
                 new_balance = float(balance) - cost
                 supabase.table("users").update({"wallet_balance": new_balance}).eq("phone", phone).execute()
                 
@@ -140,6 +137,19 @@ else:
                 st.rerun()
             else:
                 st.error("Insufficient wallet balance. Please fund your wallet.")
+
+    # --- TRANSACTION HISTORY SECTION ---
+    st.markdown("---")
+    st.markdown("### Recent Transactions")
+    try:
+        tx_response = supabase.table("transactions").select("*").eq("phone", phone).order("created_at", desc=True).limit(10).execute()
+        if tx_response.data:
+            for tx in tx_response.data:
+                st.markdown(f"- **{tx['service_type']}** | {tx['network']} - {tx['details']} | **₦{tx['amount']:,.2f}** | *{tx['status']}*")
+        else:
+            st.info("No transaction history yet.")
+    except Exception as e:
+        st.write("Could not load transaction history.")
 
     st.markdown("---")
     if st.button("Log Out"):
