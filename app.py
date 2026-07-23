@@ -24,11 +24,11 @@ if "logged_in" not in st.session_state:
   st.session_state.logged_in = False
 
 
-# Database Helper Function
+# Database Helper Function (using 'profiles' table)
 def get_user_from_db(identifier):
   try:
     response = (
-        supabase.table("users")
+        supabase.table("profiles")
         .select("*")
         .or_(f"username.eq.{identifier},phone.eq.{identifier}")
         .execute()
@@ -74,7 +74,7 @@ if not st.session_state["logged_in"]:
     if st.button("Register Account"):
       if new_user and new_phone and new_pass:
         try:
-          supabase.table("users").insert({
+          supabase.table("profiles").insert({
               "username": new_user,
               "phone": new_phone,
               "password": new_pass,
@@ -95,7 +95,7 @@ if not st.session_state["logged_in"]:
         if user:
           token = str(random.randint(100000, 999999))
           expiry = datetime.now() + timedelta(minutes=10)
-          supabase.table("users").update({
+          supabase.table("profiles").update({
               "reset_token": token,
               "token_expiry": expiry.isoformat(),
           }).or_(f"username.eq.{reset_id},phone.eq.{reset_id}").execute()
@@ -125,10 +125,10 @@ if not st.session_state["logged_in"]:
               and token_exp
               and datetime.now() < datetime.fromisoformat(token_exp)
           ):
-            supabase.table("users").update({"password": new_pass_input}).or_(
+            supabase.table("profiles").update({"password": new_pass_input}).or_(
                 f"username.eq.{st.session_state['reset_id']},phone.eq.{st.session_state['reset_id']}"
             ).execute()
-            supabase.table("users").update(
+            supabase.table("profiles").update(
                 {"reset_token": None, "token_expiry": None}
             ).or_(
                 f"username.eq.{st.session_state['reset_id']},phone.eq.{st.session_state['reset_id']}"
@@ -140,7 +140,6 @@ if not st.session_state["logged_in"]:
 
 # --- MAIN APP INTERFACE (ONLY SHOWN AFTER SUCCESSFUL LOGIN) ---
 else:
-  # Sidebar for Wallet Management & Logout
   st.sidebar.title("💰 Wallet Hub")
   st.sidebar.success(
       f"Logged in as: **{st.session_state.get('username', 'User')}**"
@@ -178,7 +177,6 @@ else:
     st.sidebar.success(f"Wallet credited with ₦{funding_amount:,.2f}!")
     st.rerun()
 
-  # Main Dashboard Content
   st.title("📱 Dankowa Data & Airtime Hub")
   st.write(
       "Welcome back! Buy cheap SME data and airtime instantly with automated"
