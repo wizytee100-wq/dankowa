@@ -1,6 +1,7 @@
 import streamlit as st
 from supabase import create_client
 import requests
+import random
 
 # Initialize Supabase connection using Streamlit secrets
 url = st.secrets["SUPABASE_URL"]
@@ -19,18 +20,18 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# Session state initialization for login & reset mode
+# Session state initialization for login & reset modes
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.identifier = ""
 
-if "reset_mode" not in st.session_state:
-    st.session_state.reset_mode = False
+if "reset_step" not in st.session_state:
+    st.session_state.reset_step = 1  # Step 1: Request OTP, Step 2: Verify & Reset
 
 # Authentication Section
 if not st.session_state.logged_in:
     
-    if not st.session_state.reset_mode:
+    if st.session_state.reset_step == 1:
         st.markdown("### 🔐 Secure Sign In & Registration")
         st.write("Enter your phone number or Gmail and password to continue.")
         
@@ -94,54 +95,69 @@ if not st.session_state.logged_in:
                     st.warning("Enter your phone/email and a password to register.")
 
         st.markdown("---")
-        if st.button("Forgot / Change Password? Click Here"):
-            st.session_state.reset_mode = True
-            st.rerun()
+        if st.button("Forgot Password? Request OTP"):
+            if identifier_input.strip():
+                identifier = identifier_input.strip()
+                try:
+                    response = supabase.table("users").select("*").eq("phone", identifier).execute()
+                    if response.data:
+                        # Generate secure 6-digit OTP
+                        generated_otp = str(random.randint(100000, 999999))
+                        supabase.table("users").update({"otp_code": generated_otp}).eq("phone", identifier).execute()
+                        
+                        st.session_state.reset_identifier = identifier
+                        st.session_state.reset_step = 2
+                        st.success(f"OTP Generated successfully! (Simulation Code: **{generated_otp}**)")
+                        st.rerun()
+                    else:
+                        st.error("Account not found with this identifier.")
+                except Exception as e:
+                    st.error(f"Database error: {e}")
+            else:
+                st.warning("Please enter your Phone Number or Gmail address above first, then click 'Forgot Password'.")
 
     else:
-        # --- SECURE VERIFICATION & PASSWORD RESET VIEW ---
-        st.markdown("### 🔄 Secure Password Reset")
-        st.write("For your security, please verify your identity with your account details and current (or temporary) password before setting a new one.")
+        # --- STEP 2: VERIFY OTP AND SET NEW PASSWORD ---
+        st.markdown("### 🔑 Enter 6-Digit OTP & New Password")
+        st.write(f"A verification code has been generated for: **{st.session_state.get('reset_identifier', '')}**")
         
-        reset_choice = st.selectbox("Identifier Type", ["Phone Number", "Google (Gmail)"])
-        if reset_choice == "Phone Number":
-            reset_identifier = st.text_input("Registered Phone Number")
-        else:
-            reset_identifier = st.text_input("Registered Gmail Address")
-            
-        old_pass_input = st.text_input("Current / Old Password (or Transfer PIN if forgotten)", type="password")
-        new_pass_input = st.text_input("Enter New Password", type="password")
-        confirm_pass_input = st.text_input("Confirm New Password", type="password")
+        entered_otp = st.text_input("Enter 6-Digit OTP Code", max_chars=6)
+        new_password = st.text_input("Enter New Password", type="password")
+        confirm_password = st.text_input("Confirm New Password", type="password")
         
-        if st.button("Verify and Update Password", use_container_width=True):
-            if reset_identifier.strip() and old_pass_input.strip() and new_pass_input.strip():
-                if new_pass_input == confirm_pass_input:
+        if st.button("Reset Password with OTP", use_container_width=True):
+            if entered_otp.strip() and new_password.strip():
+                if new_password == confirm_password:
+                    identifier = st.session_state.reset_identifier
                     try:
-                        response = supabase.table("users").select("*").eq("phone", reset_identifier.strip()).execute()
+                        response = supabase.table("users").select("*").eq("phone", identifier).execute()
                         if response.data:
                             user_record = response.data[0]
-                            stored_pass = str(user_record.get("password", ""))
-                            stored_pin = str(user_record.get("pin", ""))
+                            stored_otp = str(user_record.get("otp_code", ""))
                             
-                            # Verification check: must match password OR the 4-digit transfer PIN as a fallback security check
-                            if old_pass_input == stored_pass or old_pass_input == stored_pin:
-                                supabase.table("users").update({"password": new_pass_input}).eq("phone", reset_identifier.strip()).execute()
-                                st.success("Password updated successfully! You can now log in with your new password.")
-                                st.session_state.reset_mode = False
+                            # Strict OTP Validation Check
+                            if stored_otp and entered_otp.strip() == stored_otp:
+                                supabase.table("users").update({
+                                    "password": new_password,
+                                    "otp_code": None # Clear OTP after successful use
+                                }).eq("phone", identifier).execute()
+                                
+                                st.success("Password reset successfully! You can now log in.")
+                                st.session_state.reset_step = 1
                                 st.rerun()
                             else:
-                                st.error("Verification failed! Incorrect current password or transfer PIN.")
+                                st.error("Invalid or incorrect OTP code. Please check and try again.")
                         else:
-                            st.error("Account not found with this identifier.")
+                            st.error("Account session error. Please restart.")
                     except Exception as e:
                         st.error(f"Database error: {e}")
                 else:
                     st.error("New passwords do not match!")
             else:
-                st.warning("Please fill in all fields to complete verification.")
+                st.warning("Please enter the 6-digit OTP and your new password.")
 
-        if st.button("Back to Login"):
-            st.session_state.reset_mode = False
+        if st.button("Cancel / Back to Login"):
+            st.session_state.reset_step = 1
             st.rerun()
 
 else:
