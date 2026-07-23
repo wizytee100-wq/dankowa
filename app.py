@@ -2,12 +2,14 @@ import streamlit as st
 from supabase import create_client
 import requests
 import random
+import resend
 
-# Initialize Supabase connection using Streamlit secrets
+# Initialize Supabase and Resend using Streamlit secrets
 url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 PAYSTACK_SECRET_KEY = st.secrets.get("PAYSTACK_SECRET_KEY", "")
+resend.api_key = st.secrets["RESEND_API_KEY"]
 
 # Page Configuration for a professional look
 st.set_page_config(page_title="Dankowa Data Portal", page_icon="⚡", layout="centered")
@@ -95,7 +97,7 @@ if not st.session_state.logged_in:
                     st.warning("Enter your phone/email and a password to register.")
 
         st.markdown("---")
-        if st.button("Forgot Password? Request OTP"):
+        if st.button("Forgot Password? Send Email OTP"):
             if identifier_input.strip():
                 identifier = identifier_input.strip()
                 try:
@@ -105,21 +107,40 @@ if not st.session_state.logged_in:
                         generated_otp = str(random.randint(100000, 999999))
                         supabase.table("users").update({"otp_code": generated_otp}).eq("phone", identifier).execute()
                         
-                        st.session_state.reset_identifier = identifier
-                        st.session_state.reset_step = 2
-                        st.success(f"OTP Generated successfully! (Simulation Code: **{generated_otp}**)")
-                        st.rerun()
+                        # Send Live Email via Resend API
+                        try:
+                            email_params = {
+                                "from": "Dankowa Data Hub <onboarding@resend.dev>",
+                                "to": [identifier],
+                                "subject": "Your Password Reset OTP",
+                                "html": f"""
+                                    <div style='font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px;'>
+                                        <h2>⚡ Dankowa Data Hub Security</h2>
+                                        <p>You requested a password reset for your account.</p>
+                                        <p>Your secure verification code is:</p>
+                                        <h1 style='color: #1e3c72; letter-spacing: 3px;'>{generated_otp}</h1>
+                                        <p>If you didn't request this, please ignore this email.</p>
+                                    </div>
+                                """
+                            }
+                            resend.Emails.send(email_params)
+                            st.session_state.reset_identifier = identifier
+                            st.session_state.reset_step = 2
+                            st.success(f"OTP sent successfully to **{identifier}**! Check your email inbox.")
+                            st.rerun()
+                        except Exception as mail_err:
+                            st.error(f"Failed to send email: {mail_err}")
                     else:
                         st.error("Account not found with this identifier.")
                 except Exception as e:
                     st.error(f"Database error: {e}")
             else:
-                st.warning("Please enter your Phone Number or Gmail address above first, then click 'Forgot Password'.")
+                st.warning("Please enter your Phone Number or Gmail address above first.")
 
     else:
         # --- STEP 2: VERIFY OTP AND SET NEW PASSWORD ---
-        st.markdown("### 🔑 Enter 6-Digit OTP & New Password")
-        st.write(f"A verification code has been generated for: **{st.session_state.get('reset_identifier', '')}**")
+        st.markdown("### 🔑 Enter 6-Digit Email OTP & New Password")
+        st.write(f"Check your email inbox (**{st.session_state.get('reset_identifier', '')}**) for the 6-digit verification code.")
         
         entered_otp = st.text_input("Enter 6-Digit OTP Code", max_chars=6)
         new_password = st.text_input("Enter New Password", type="password")
@@ -139,7 +160,7 @@ if not st.session_state.logged_in:
                             if stored_otp and entered_otp.strip() == stored_otp:
                                 supabase.table("users").update({
                                     "password": new_password,
-                                    "otp_code": None # Clear OTP after successful use
+                                    "otp_code": None # Clear OTP after use
                                 }).eq("phone", identifier).execute()
                                 
                                 st.success("Password reset successfully! You can now log in.")
