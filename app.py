@@ -192,13 +192,21 @@ else:
       " bonus when they fund their wallet!"
   )
 
+  # Statistics Summary Section
+  total_spent = sum(tx["cost"] for tx in st.session_state.transactions)
+  total_purchases = len(st.session_state.transactions)
+  col1, col2 = st.columns(2)
+  col1.metric("Total Spent", f"₦{total_spent:,.2f}")
+  col2.metric("Total Orders", total_purchases)
+  st.markdown("---")
+
   network = st.selectbox(
       "Select Network Provider",
       ["MTN", "Airtel", "Glo", "9mobile", "Smile 4G", "Spectranet"],
   )
   service_type = st.radio("Select Service", ["Data Bundle", "Airtime Top-up"])
 
-  # Massive Comprehensive Data Plan List (MB -> GB -> TB -> Unlimited)
+  # Comprehensive Data Plan List (MB -> GB -> TB -> Unlimited)
   prices = {
       "100MB (1 Day) - ₦50": 50,
       "200MB (3 Days) - ₦90": 90,
@@ -238,10 +246,12 @@ else:
         st.session_state.wallet_balance -= cost
 
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        tx_ref = f"DNK-{random.randint(10000000, 99999999)}"
         details = (
             f"{plan}" if service_type == "Data Bundle" else f"₦{cost} Airtime"
         )
         transaction_record = {
+            "ref": tx_ref,
             "time": current_time,
             "network": network,
             "type": service_type,
@@ -263,7 +273,7 @@ else:
       st.error("Please enter a valid 11-digit phone number.")
 
   st.markdown("---")
-  st.subheader("📜 Recent Transaction History")
+  st.subheader("📜 Recent Transaction History & Receipts")
 
   if len(st.session_state.transactions) > 0:
     for idx, tx in enumerate(st.session_state.transactions):
@@ -272,8 +282,34 @@ else:
             f"**{idx+1}. [{tx['time']}] {tx['network']} - {tx['type']}**"
         )
         st.text(
-            f"Details: {tx['details']} | Phone: {tx['phone']} | Cost:"
-            f" ₦{tx['cost']:,}"
+            f"Ref: {tx['ref']} | Details: {tx['details']} | Phone:"
+            f" {tx['phone']} | Cost: ₦{tx['cost']:,}"
+        )
+
+        # Downloadable text receipt for each transaction
+        receipt_text = (
+            "===================================\n"
+            "       DANKOWA DATA & AIRTIME HUB  \n"
+            "          OFFICIAL RECEIPT         \n"
+            "===================================\n"
+            f"Reference ID : {tx['ref']}\n"
+            f"Date & Time  : {tx['time']}\n"
+            f"Network      : {tx['network']}\n"
+            f"Service Type : {tx['type']}\n"
+            f"Item Details : {tx['details']}\n"
+            f"Phone Number : {tx['phone']}\n"
+            f"Total Paid   : ₦{tx['cost']:,}\n"
+            f"Status       : SUCCESSFUL\n"
+            "===================================\n"
+            "     Thank you for choosing us!    \n"
+            "==================================="
+        )
+        st.download_button(
+            label=f"📥 Download Receipt ({tx['ref']})",
+            data=receipt_text,
+            file_name=f"Receipt_{tx['ref']}.txt",
+            mime="text/plain",
+            key=f"receipt_{tx['ref']}",
         )
         st.markdown("---")
   else:
