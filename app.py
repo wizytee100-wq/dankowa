@@ -8,14 +8,14 @@ st.set_page_config(
     page_title="Dankowa Data & Airtime Hub", page_icon="📱", layout="centered"
 )
 
-# Initialize Supabase client (using Streamlit Secrets)
+# Initialize Supabase client
 supabase = create_client(
     st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 )
 
 # Initialize Session State
 if "wallet_balance" not in st.session_state:
-  st.session_state.wallet_balance = 5000.00  # Starting balance in ₦
+  st.session_state.wallet_balance = 5000.00
 
 if "transactions" not in st.session_state:
   st.session_state.transactions = []
@@ -23,11 +23,8 @@ if "transactions" not in st.session_state:
 if "logged_in" not in st.session_state:
   st.session_state.logged_in = False
 
-if "auth_mode" not in st.session_state:
-  st.session_state.auth_mode = "Log In"
 
-
-# Database Helper Functions for Users & Recovery
+# Database Helper Function
 def get_user_from_db(identifier):
   try:
     response = (
@@ -43,36 +40,38 @@ def get_user_from_db(identifier):
   return None
 
 
-# --- SIDEBAR: AUTHENTICATION & WALLET HUB ---
-st.sidebar.title("🔐 Account & Wallet")
-
+# --- GATEKEEPER: IF NOT LOGGED IN, SHOW AUTHENTICATION SCREENS ---
 if not st.session_state["logged_in"]:
-  auth_choice = st.sidebar.radio(
-      "Account Access", ["Log In", "Sign Up", "Forgot Password"]
+  st.title("📱 Dankowa Data & Airtime Hub")
+  st.write("Please log in or create an account to access the platform.")
+
+  auth_tab = st.radio(
+      "Choose Action", ["Log In", "Sign Up", "Forgot Password"]
   )
+  st.markdown("---")
 
-  if auth_choice == "Log In":
-    st.sidebar.subheader("Log In")
-    login_id = st.sidebar.text_input("Username or Phone")
-    login_pass = st.sidebar.text_input("Password", type="password")
+  if auth_tab == "Log In":
+    st.subheader("Log In to Your Account")
+    login_id = st.text_input("Username or Phone Number")
+    login_pass = st.text_input("Password", type="password")
 
-    if st.sidebar.button("Sign In"):
+    if st.button("Log In Now"):
       user = get_user_from_db(login_id)
       if user and user.get("password") == login_pass:
         st.session_state["logged_in"] = True
         st.session_state["username"] = user.get("username")
-        st.sidebar.success("Logged in successfully!")
+        st.success("Logged in successfully!")
         st.rerun()
       else:
-        st.sidebar.error("Invalid credentials.")
+        st.error("Invalid credentials. Please check your username and password.")
 
-  elif auth_choice == "Sign Up":
-    st.sidebar.subheader("Create Account")
-    new_user = st.sidebar.text_input("Choose Username")
-    new_phone = st.sidebar.text_input("Phone Number")
-    new_pass = st.sidebar.text_input("Choose Password", type="password")
+  elif auth_tab == "Sign Up":
+    st.subheader("Create a New Account")
+    new_user = st.text_input("Choose Username")
+    new_phone = st.text_input("Phone Number")
+    new_pass = st.text_input("Choose Password", type="password")
 
-    if st.sidebar.button("Register Account"):
+    if st.button("Register Account"):
       if new_user and new_phone and new_pass:
         try:
           supabase.table("users").insert({
@@ -80,19 +79,17 @@ if not st.session_state["logged_in"]:
               "phone": new_phone,
               "password": new_pass,
           }).execute()
-          st.sidebar.success(
-              "Account created! Please switch to Log In tab."
-          )
+          st.success("Account created successfully! Please switch to 'Log In'.")
         except Exception as e:
-          st.sidebar.error(f"Error: {e}")
+          st.error(f"Error creating account: {e}")
       else:
-        st.sidebar.warning("Fill in all fields.")
+        st.warning("Please fill in all fields.")
 
-  elif auth_choice == "Forgot Password":
-    st.sidebar.subheader("Password Recovery")
-    reset_id = st.sidebar.text_input("Registered Username or Phone")
+  elif auth_tab == "Forgot Password":
+    st.subheader("Account Recovery")
+    reset_id = st.text_input("Enter your registered Username or Phone")
 
-    if st.sidebar.button("Generate Code"):
+    if st.button("Generate Recovery Code"):
       if reset_id:
         user = get_user_from_db(reset_id)
         if user:
@@ -103,21 +100,23 @@ if not st.session_state["logged_in"]:
               "token_expiry": expiry.isoformat(),
           }).or_(f"username.eq.{reset_id},phone.eq.{reset_id}").execute()
 
-          st.sidebar.session_state["reset_id"] = reset_id
-          st.sidebar.success(f"Recovery Code (Copy): **{token}**")
+          st.session_state["reset_id"] = reset_id
+          st.success(
+              "Recovery code generated! Your code is: " f"**{token}**"
+          )
         else:
-          st.sidebar.error("User not found.")
+          st.error("Account not found.")
       else:
-        st.sidebar.warning("Enter your identifier.")
+        st.warning("Please enter your identifier.")
 
-    if "reset_id" in st.sidebar.session_state:
-      entered_token = st.sidebar.text_input("Enter 6-digit Code")
-      new_pass_input = st.sidebar.text_input(
-          "New Password", type="password", key="new_pass_inp"
+    if "reset_id" in st.session_state:
+      entered_token = st.text_input("Enter 6-digit Recovery Code")
+      new_pass_input = st.text_input(
+          "Enter New Password", type="password", key="new_pass_inp"
       )
 
-      if st.sidebar.button("Reset Password Now"):
-        user_rec = get_user_from_db(st.sidebar.session_state["reset_id"])
+      if st.button("Reset Password"):
+        user_rec = get_user_from_db(st.session_state["reset_id"])
         if user_rec:
           stored_token = user_rec.get("reset_token")
           token_exp = user_rec.get("token_expiry")
@@ -127,21 +126,22 @@ if not st.session_state["logged_in"]:
               and datetime.now() < datetime.fromisoformat(token_exp)
           ):
             supabase.table("users").update({"password": new_pass_input}).or_(
-                f"username.eq.{st.sidebar.session_state['reset_id']},phone.eq.{st.sidebar.session_state['reset_id']}"
+                f"username.eq.{st.session_state['reset_id']},phone.eq.{st.session_state['reset_id']}"
             ).execute()
             supabase.table("users").update(
                 {"reset_token": None, "token_expiry": None}
             ).or_(
-                f"username.eq.{st.sidebar.session_state['reset_id']},phone.eq.{st.sidebar.session_state['reset_id']}"
+                f"username.eq.{st.session_state['reset_id']},phone.eq.{st.session_state['reset_id']}"
             ).execute()
-            st.sidebar.success(
-                "Password updated! You can now log in securely."
-            )
-            del st.sidebar.session_state["reset_id"]
+            st.success("Password updated successfully! You can now log in.")
+            del st.session_state["reset_id"]
           else:
-            st.sidebar.error("Invalid or expired code.")
+            st.error("Invalid or expired recovery code.")
 
+# --- MAIN APP INTERFACE (ONLY SHOWN AFTER SUCCESSFUL LOGIN) ---
 else:
+  # Sidebar for Wallet Management & Logout
+  st.sidebar.title("💰 Wallet Hub")
   st.sidebar.success(
       f"Logged in as: **{st.session_state.get('username', 'User')}**"
   )
@@ -149,8 +149,6 @@ else:
     st.session_state["logged_in"] = False
     st.rerun()
 
-  st.sidebar.markdown("---")
-  st.sidebar.title("💰 Wallet Hub")
   st.sidebar.metric(
       label="Current Balance", value=f"₦{st.session_state.wallet_balance:,.2f}"
   )
@@ -180,86 +178,83 @@ else:
     st.sidebar.success(f"Wallet credited with ₦{funding_amount:,.2f}!")
     st.rerun()
 
-# --- MAIN APP INTERFACE ---
-st.title("📱 Dankowa Data & Airtime Hub")
-st.write(
-    "Welcome back! Buy cheap SME data and airtime instantly with automated"
-    " delivery."
-)
-
-# Network Selection including additional providers
-network = st.selectbox(
-    "Select Network Provider",
-    ["MTN", "Airtel", "Glo", "9mobile", "Smile 4G", "Spectranet"],
-)
-service_type = st.radio("Select Service", ["Data Bundle", "Airtime Top-up"])
-
-# Pricing Mapping
-prices = {
-    "500MB - ₦130": 130,
-    "1GB - ₦250": 250,
-    "2GB - ₦500": 500,
-    "5GB - ₦1,200": 1200,
-}
-
-cost = 0
-plan = ""
-
-if service_type == "Data Bundle":
-  plan = st.selectbox("Select Data Plan", list(prices.keys()))
-  cost = prices[plan]
-  st.info(f"Price: ₦{cost}")
-else:
-  cost = st.number_input(
-      "Enter Airtime Amount (₦)", min_value=50, max_value=10000, step=50
+  # Main Dashboard Content
+  st.title("📱 Dankowa Data & Airtime Hub")
+  st.write(
+      "Welcome back! Buy cheap SME data and airtime instantly with automated"
+      " delivery."
   )
 
-phone_number = st.text_input("Enter Phone Number", max_chars=11)
+  network = st.selectbox(
+      "Select Network Provider",
+      ["MTN", "Airtel", "Glo", "9mobile", "Smile 4G", "Spectranet"],
+  )
+  service_type = st.radio("Select Service", ["Data Bundle", "Airtime Top-up"])
 
-if st.button("Proceed with Transaction"):
-  if len(phone_number) == 11:
-    if st.session_state.wallet_balance >= cost:
-      # Deduct from wallet
-      st.session_state.wallet_balance -= cost
+  prices = {
+      "500MB - ₦130": 130,
+      "1GB - ₦250": 250,
+      "2GB - ₦500": 500,
+      "5GB - ₦1,200": 1200,
+  }
 
-      # Record Transaction
-      current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-      details = f"{plan}" if service_type == "Data Bundle" else f"₦{cost} Airtime"
-      transaction_record = {
-          "time": current_time,
-          "network": network,
-          "type": service_type,
-          "details": details,
-          "phone": phone_number,
-          "cost": cost,
-      }
-      st.session_state.transactions.insert(0, transaction_record)
+  cost = 0
+  plan = ""
 
-      st.success(
-          f"Transaction successful! {service_type} sent to {phone_number}."
-      )
-    else:
-      st.error(
-          "Insufficient wallet funds! Please fund your wallet via bank transfer"
-          " from the sidebar."
-      )
+  if service_type == "Data Bundle":
+    plan = st.selectbox("Select Data Plan", list(prices.keys()))
+    cost = prices[plan]
+    st.info(f"Price: ₦{cost}")
   else:
-    st.error("Please enter a valid 11-digit phone number.")
+    cost = st.number_input(
+        "Enter Airtime Amount (₦)", min_value=50, max_value=10000, step=50
+    )
 
-# Transaction History Section
-st.markdown("---")
-st.subheader("📜 Recent Transaction History")
+  phone_number = st.text_input("Enter Phone Number", max_chars=11)
 
-if len(st.session_state.transactions) > 0:
-  for idx, tx in enumerate(st.session_state.transactions):
-    with st.container():
-      st.write(
-          f"**{idx+1}. [{tx['time']}] {tx['network']} - {tx['type']}**"
-      )
-      st.text(
-          f"Details: {tx['details']} | Phone: {tx['phone']} | Cost:"
-          f" ₦{tx['cost']}"
-      )
-      st.markdown("---")
-else:
-  st.write("No transactions recorded yet.")
+  if st.button("Proceed with Transaction"):
+    if len(phone_number) == 11:
+      if st.session_state.wallet_balance >= cost:
+        st.session_state.wallet_balance -= cost
+
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        details = (
+            f"{plan}" if service_type == "Data Bundle" else f"₦{cost} Airtime"
+        )
+        transaction_record = {
+            "time": current_time,
+            "network": network,
+            "type": service_type,
+            "details": details,
+            "phone": phone_number,
+            "cost": cost,
+        }
+        st.session_state.transactions.insert(0, transaction_record)
+
+        st.success(
+            f"Transaction successful! {service_type} sent to {phone_number}."
+        )
+      else:
+        st.error(
+            "Insufficient wallet funds! Please fund your wallet via bank"
+            " transfer from the sidebar."
+        )
+    else:
+      st.error("Please enter a valid 11-digit phone number.")
+
+  st.markdown("---")
+  st.subheader("📜 Recent Transaction History")
+
+  if len(st.session_state.transactions) > 0:
+    for idx, tx in enumerate(st.session_state.transactions):
+      with st.container():
+        st.write(
+            f"**{idx+1}. [{tx['time']}] {tx['network']} - {tx['type']}**"
+        )
+        st.text(
+            f"Details: {tx['details']} | Phone: {tx['phone']} | Cost:"
+            f" ₦{tx['cost']}"
+        )
+        st.markdown("---")
+  else:
+    st.write("No transactions recorded yet.")
