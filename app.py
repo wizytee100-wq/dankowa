@@ -70,7 +70,6 @@ if not st.session_state["logged_in"]:
     new_user = st.text_input("Choose Username")
     new_phone = st.text_input("Phone Number")
     new_pass = st.text_input("Choose Password", type="password")
-    referred_by = st.text_input("Referrer Username (Optional)")
 
     if st.button("Register Account"):
       if new_user and new_phone and new_pass:
@@ -213,12 +212,13 @@ else:
         " delivery."
     )
 
-    # Referral Banner / Invite Feature
-    st.info(
-        "🎁 **Refer & Earn:** Share your username **"
-        f"{current_user}** with friends and get ₦100 bonus when they fund"
-        " their wallet!"
-    )
+    # --- PROFESSIONAL PROMOTIONAL BANNERS ---
+    banner_option = random.choice([
+        "🔥 **MEGA DISCOUNT:** Enjoy extra cheap SME data across all networks valid for 30 days!",
+        "⚡ **INSTANT DELIVERY:** All data and airtime purchases are delivered automatically in seconds!",
+        f"🎁 **REFER & EARN:** Invite your friends using your username **{current_user}** and get rewarded!",
+    ])
+    st.success(banner_option)
 
     # Statistics Summary Section
     total_spent = sum(tx["cost"] for tx in st.session_state.transactions)
