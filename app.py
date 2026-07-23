@@ -24,7 +24,7 @@ if "logged_in" not in st.session_state:
   st.session_state.logged_in = False
 
 
-# Database Helper Function (using 'profiles' table)
+# Database Helper Function
 def get_user_from_db(identifier):
   try:
     response = (
@@ -140,6 +140,7 @@ if not st.session_state["logged_in"]:
 
 # --- MAIN APP INTERFACE (ONLY SHOWN AFTER SUCCESSFUL LOGIN) ---
 else:
+  # Sidebar for Wallet Management & Logout
   st.sidebar.title("💰 Wallet Hub")
   st.sidebar.success(
       f"Logged in as: **{st.session_state.get('username', 'User')}**"
@@ -177,10 +178,18 @@ else:
     st.sidebar.success(f"Wallet credited with ₦{funding_amount:,.2f}!")
     st.rerun()
 
+  # Main Dashboard Content
   st.title("📱 Dankowa Data & Airtime Hub")
   st.write(
       "Welcome back! Buy cheap SME data and airtime instantly with automated"
       " delivery."
+  )
+
+  # Referral Banner / Invite Feature
+  st.info(
+      "🎁 **Refer & Earn:** Share your username **"
+      f"{st.session_state.get('username', 'User')}** with friends and get ₦100"
+      " bonus when they fund their wallet!"
   )
 
   network = st.selectbox(
@@ -189,11 +198,16 @@ else:
   )
   service_type = st.radio("Select Service", ["Data Bundle", "Airtime Top-up"])
 
+  # Comprehensive Data Plan Pricing (MB -> GB -> TB -> Unlimited)
   prices = {
       "500MB - ₦130": 130,
       "1GB - ₦250": 250,
       "2GB - ₦500": 500,
       "5GB - ₦1,200": 1200,
+      "10GB - ₦2,300": 2300,
+      "50GB (TB Tier) - ₦10,500": 10500,
+      "100GB (TB Tier) - ₦20,000": 20000,
+      "Unlimited (Monthly) - ₦45,000": 45000,
   }
 
   cost = 0
@@ -202,7 +216,7 @@ else:
   if service_type == "Data Bundle":
     plan = st.selectbox("Select Data Plan", list(prices.keys()))
     cost = prices[plan]
-    st.info(f"Price: ₦{cost}")
+    st.info(f"Price: ₦{cost:,}")
   else:
     cost = st.number_input(
         "Enter Airtime Amount (₦)", min_value=50, max_value=10000, step=50
@@ -251,7 +265,7 @@ else:
         )
         st.text(
             f"Details: {tx['details']} | Phone: {tx['phone']} | Cost:"
-            f" ₦{tx['cost']}"
+            f" ₦{tx['cost']:,}"
         )
         st.markdown("---")
   else:
