@@ -198,16 +198,24 @@ else:
   )
   service_type = st.radio("Select Service", ["Data Bundle", "Airtime Top-up"])
 
-  # Comprehensive Data Plan Pricing (MB -> GB -> TB -> Unlimited)
+  # Massive Comprehensive Data Plan List (MB -> GB -> TB -> Unlimited)
   prices = {
-      "500MB - ₦130": 130,
-      "1GB - ₦250": 250,
-      "2GB - ₦500": 500,
-      "5GB - ₦1,200": 1200,
-      "10GB - ₦2,300": 2300,
+      "100MB (1 Day) - ₦50": 50,
+      "200MB (3 Days) - ₦90": 90,
+      "500MB (7 Days) - ₦130": 130,
+      "1GB (30 Days) - ₦250": 250,
+      "2GB (30 Days) - ₦500": 500,
+      "3GB (30 Days) - ₦750": 750,
+      "5GB (30 Days) - ₦1,200": 1200,
+      "10GB (30 Days) - ₦2,300": 2300,
+      "20GB (30 Days) - ₦4,500": 4500,
+      "40GB (Monthly Mega) - ₦8,500": 8500,
       "50GB (TB Tier) - ₦10,500": 10500,
       "100GB (TB Tier) - ₦20,000": 20000,
-      "Unlimited (Monthly) - ₦45,000": 45000,
+      "200GB (TB Tier) - ₦38,000": 38000,
+      "500GB (Heavy Duty TB) - ₦90,000": 90000,
+      "1TB (Enterprise Terabyte) - ₦175,000": 175000,
+      "Unlimited Plan (1 Month) - ₦45,000": 45000,
   }
 
   cost = 0
