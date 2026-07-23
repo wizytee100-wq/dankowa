@@ -1,383 +1,73 @@
-import streamlit as st
-from supabase import create_client
-import requests
 import random
-import resend
+from datetime import datetime, timedelta
+import streamlit as st
 
-# Initialize Supabase and Resend using Streamlit secrets
-url = st.secrets["SUPABASE_URL"]
-key = st.secrets["SUPABASE_KEY"]
-supabase = create_client(url, key)
-PAYSTACK_SECRET_KEY = st.secrets.get("PAYSTACK_SECRET_KEY", "")
-resend.api_key = st.secrets["RESEND_API_KEY"]
+st.subheader("Account Recovery")
 
-# Page Configuration for a professional look
-st.set_page_config(page_title="Dankowa Data Portal", page_icon="⚡", layout="centered")
+# Step 1: Request username/phone to trigger reset
+reset_identity = st.text_input(
+    "Enter your registered Username or Phone Number"
+)
 
-# App Header Banner
-st.markdown("""
-    <div style='background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); padding: 25px; border-radius: 12px; color: white; text-align: center; margin-bottom: 20px;'>
-        <h1 style='margin: 0; font-size: 28px;'>⚡ Dankowa Data Hub</h1>
-        <p style='margin: 5px 0 0 0; font-size: 16px;'>Instant Cheap Data, Airtime & Automated Services</p>
-    </div>
-""", unsafe_allow_html=True)
+if st.button("Generate Recovery Code"):
+  if reset_identity:
+    # Check if user exists in your database
+    user = get_user_from_db(reset_identity)  
 
-# Session state initialization for login & reset modes
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-    st.session_state.identifier = ""
+    if user:
+      # Generate a secure 6-digit code
+      token = str(random.randint(100000, 999999))
+      # Set expiry time to 10 minutes from now
+      expiry = datetime.now() + timedelta(minutes=10)
 
-if "reset_step" not in st.session_state:
-    st.session_state.reset_step = 1  # Step 1: Request OTP, Step 2: Verify & Reset
+      # Save token and expiry into the database for this specific user
+      save_reset_token_to_db(reset_identity, token, expiry)
 
-# Authentication Section
-if not st.session_state.logged_in:
-    
-    if st.session_state.reset_step == 1:
-        st.markdown("### 🔐 Secure Sign In & Registration")
-        st.write("Enter your phone number or Gmail and password to continue.")
-        
-        auth_choice = st.selectbox("Identifier Type", ["Phone Number", "Google (Gmail)"])
-        
-        if auth_choice == "Phone Number":
-            identifier_input = st.text_input("Phone Number (e.g. 08012345678)")
-        else:
-            identifier_input = st.text_input("Gmail Address")
-            
-        password_input = st.text_input("Account Password", type="password")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if st.button("Login", use_container_width=True):
-                if identifier_input.strip() and password_input.strip():
-                    identifier = identifier_input.strip()
-                    try:
-                        response = supabase.table("users").select("*").eq("phone", identifier).execute()
-                        if response.data:
-                            user_record = response.data[0]
-                            stored_pass = str(user_record.get("password", ""))
-                            
-                            if stored_pass == password_input:
-                                st.session_state.logged_in = True
-                                st.session_state.identifier = identifier
-                                st.rerun()
-                            else:
-                                st.error("Incorrect password. Please try again.")
-                        else:
-                            st.error("Account not found. Please register a new account.")
-                    except Exception as e:
-                        st.error(f"Database error: {e}")
-                else:
-                    st.warning("Please fill in both your identifier and your password.")
+      # Store state so the app knows the token was generated
+      st.session_state["reset_identity"] = reset_identity
+      st.session_state["token_generated"] = True
 
-        with col2:
-            if st.button("Register New Account", use_container_width=True):
-                if identifier_input.strip() and password_input.strip():
-                    identifier = identifier_input.strip()
-                    try:
-                        response = supabase.table("users").select("*").eq("phone", identifier).execute()
-                        if response.data:
-                            st.error("Account already exists! You can log in directly.")
-                        else:
-                            supabase.table("users").insert({
-                                "phone": identifier, 
-                                "wallet_balance": 0.00,
-                                "referral_bonus": 0.00,
-                                "password": password_input,
-                                "pin": "1234"
-                            }).execute()
-                            st.success("Account created successfully! Logging you in...")
-                            st.session_state.logged_in = True
-                            st.session_state.identifier = identifier
-                            st.rerun()
-                    except Exception as e:
-                        st.error(f"Database error: {e}")
-                else:
-                    st.warning("Enter your phone/email and a password to register.")
-
-        st.markdown("---")
-        if st.button("Forgot Password? Send Email OTP"):
-            if identifier_input.strip():
-                identifier = identifier_input.strip()
-                try:
-                    response = supabase.table("users").select("*").eq("phone", identifier).execute()
-                    if response.data:
-                        # Generate secure 6-digit OTP
-                        generated_otp = str(random.randint(100000, 999999))
-                        supabase.table("users").update({"otp_code": generated_otp}).eq("phone", identifier).execute()
-                        
-                        # Send Live Email via Resend API
-                        try:
-                            email_params = {
-                                "from": "Dankowa Data Hub <onboarding@resend.dev>",
-                                "to": [identifier],
-                                "subject": "Your Password Reset OTP",
-                                "html": f"""
-                                    <div style='font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px;'>
-                                        <h2>⚡ Dankowa Data Hub Security</h2>
-                                        <p>You requested a password reset for your account.</p>
-                                        <p>Your secure verification code is:</p>
-                                        <h1 style='color: #1e3c72; letter-spacing: 3px;'>{generated_otp}</h1>
-                                        <p>If you didn't request this, please ignore this email.</p>
-                                    </div>
-                                """
-                            }
-                            resend.Emails.send(email_params)
-                            st.session_state.reset_identifier = identifier
-                            st.session_state.reset_step = 2
-                            st.success(f"OTP sent successfully to **{identifier}**! Check your email inbox.")
-                            st.rerun()
-                        except Exception as mail_err:
-                            st.error(f"Failed to send email: {mail_err}")
-                    else:
-                        st.error("Account not found with this identifier.")
-                except Exception as e:
-                    st.error(f"Database error: {e}")
-            else:
-                st.warning("Please enter your Phone Number or Gmail address above first.")
-
+      # For a seamless live experience without SMS costs or restrictions, 
+      # display the secure code directly on-screen for the user to copy:
+      st.success(
+          "Recovery code generated! (For testing/live display):"
+          f" **{token}**"
+      )
     else:
-        # --- STEP 2: VERIFY OTP AND SET NEW PASSWORD ---
-        st.markdown("### 🔑 Enter 6-Digit Email OTP & New Password")
-        st.write(f"Check your email inbox (**{st.session_state.get('reset_identifier', '')}**) for the 6-digit verification code.")
-        
-        entered_otp = st.text_input("Enter 6-Digit OTP Code", max_chars=6)
-        new_password = st.text_input("Enter New Password", type="password")
-        confirm_password = st.text_input("Confirm New Password", type="password")
-        
-        if st.button("Reset Password with OTP", use_container_width=True):
-            if entered_otp.strip() and new_password.strip():
-                if new_password == confirm_password:
-                    identifier = st.session_state.reset_identifier
-                    try:
-                        response = supabase.table("users").select("*").eq("phone", identifier).execute()
-                        if response.data:
-                            user_record = response.data[0]
-                            stored_otp = str(user_record.get("otp_code", ""))
-                            
-                            # Strict OTP Validation Check
-                            if stored_otp and entered_otp.strip() == stored_otp:
-                                supabase.table("users").update({
-                                    "password": new_password,
-                                    "otp_code": None # Clear OTP after use
-                                }).eq("phone", identifier).execute()
-                                
-                                st.success("Password reset successfully! You can now log in.")
-                                st.session_state.reset_step = 1
-                                st.rerun()
-                            else:
-                                st.error("Invalid or incorrect OTP code. Please check and try again.")
-                        else:
-                            st.error("Account session error. Please restart.")
-                    except Exception as e:
-                        st.error(f"Database error: {e}")
-                else:
-                    st.error("New passwords do not match!")
-            else:
-                st.warning("Please enter the 6-digit OTP and your new password.")
+      st.error("Account not found.")
+  else:
+    st.warning("Please enter your username or phone number.")
 
-        if st.button("Cancel / Back to Login"):
-            st.session_state.reset_step = 1
-            st.rerun()
+# Step 2: Input code and update password
+if st.session_state.get("token_generated"):
+  st.markdown("---")
+  entered_token = st.text_input("Enter 6-digit Recovery Code")
+  new_password = st.text_input("Enter New Password", type="password")
 
-else:
-    identifier = st.session_state.identifier
-    
-    # User Profile Welcome Banner
-    st.success(f"👤 Logged in as: **{identifier}**")
-    
-    # --- FLASH SALE / LUCKY HOUR BANNER ---
-    st.markdown("""
-        <div style='background-color: #ff4b4b; padding: 12px; border-radius: 8px; color: white; text-align: center; font-weight: bold; margin-bottom: 20px;'>
-            🔥 FLASH SALE ACTIVE: Get massive discounts on 1GB and 2GB plans today! 🚀
-        </div>
-    """, unsafe_allow_html=True)
+  if st.button("Reset Password"):
+    # Fetch user details from database
+    user_record = get_user_from_db(st.session_state["reset_identity"])
 
-    # Fetch user details from Supabase
-    try:
-        user_data = supabase.table("users").select("wallet_balance, referral_bonus, pin").eq("phone", identifier).execute()
-        if user_data.data:
-            balance = user_data.data[0].get("wallet_balance", 0.00)
-            ref_bonus = user_data.data[0].get("referral_bonus", 0.00)
-            user_pin = user_data.data[0].get("pin", "1234")
-        else:
-            balance = 0.00
-            ref_bonus = 0.00
-            user_pin = "1234"
-    except:
-        balance = 0.00
-        ref_bonus = 0.00
-        user_pin = "1234"
+    if user_record:
+      stored_token = user_record.get("reset_token")
+      token_expiry = user_record.get("token_expiry")
 
-    # Wallet & Rewards Display Columns
-    col_a, col_b = st.columns(2)
-    with col_a:
-        st.metric(label="💰 Wallet Balance", value=f"₦{balance:,.2f}")
-    with col_b:
-        st.metric(label="🎁 Unclaimed Rewards", value=f"₦{ref_bonus:,.2f}")
-    
-    st.markdown("---")
+      # Validate token match and check if it has expired (10 min limit)
+      if (
+          entered_token == stored_token
+          and datetime.now() < datetime.fromisoformat(token_expiry)
+      ):
+        # Update the password in your database and clear the token
+        update_password_in_db(st.session_state["reset_identity"], new_password)
+        clear_reset_token_in_db(st.session_state["reset_identity"])
 
-    # --- SETTINGS / CHANGE TRANSACTION PIN ---
-    with st.expander("⚙️ Security Settings (Change 4-Digit Transfer PIN)"):
-        current_pin_input = st.text_input("Current 4-Digit PIN", type="password", max_chars=4)
-        new_pin_input = st.text_input("New 4-Digit PIN", type="password", max_chars=4)
-        if st.button("Update Transfer PIN"):
-            if current_pin_input == str(user_pin) and len(new_pin_input) == 4:
-                supabase.table("users").update({"pin": new_pin_input}).eq("phone", identifier).execute()
-                st.success("Transfer PIN updated successfully!")
-                st.rerun()
-            else:
-                st.error("Incorrect current PIN or invalid new 4-digit PIN.")
-
-    st.markdown("---")
-
-    # --- AUTOMATED PAYSTACK FUNDING SECTION ---
-    st.markdown("### 💳 Fund Your Wallet")
-    fund_amount = st.number_input("Enter Amount to Fund (₦)", min_value=100, step=100, value=1000)
-    user_email = st.text_input("Enter Email for Receipt", value=identifier if "@" in identifier else f"{identifier}@dankowa.com")
-    
-    if st.button("Proceed to Pay with Paystack", use_container_width=True):
-        if PAYSTACK_SECRET_KEY:
-            headers = {
-                "Authorization": f"Bearer {PAYSTACK_SECRET_KEY}",
-                "Content-Type": "application/json"
-            }
-            data = {
-                "email": user_email,
-                "amount": int(fund_amount * 100),
-                "callback_url": "https://dankowa.streamlit.app"
-            }
-            try:
-                res = requests.post("https://api.paystack.co/transaction/initialize", json=data, headers=headers)
-                res_data = res.json()
-                if res_data.get("status"):
-                    auth_url = res_data["data"]["authorization_url"]
-                    st.markdown(f"👉 **[Click Here to Complete Secure Payment]({auth_url})**", unsafe_allow_html=True)
-                else:
-                    st.error("Could not initialize payment gateway.")
-            except Exception as ex:
-                st.error(f"Connection error: {ex}")
-        else:
-            st.warning("Paystack Secret Key is missing in Streamlit secrets.")
-
-    if ref_bonus > 0:
-        if st.button("Claim Referral Bonus to Wallet", use_container_width=True):
-            new_balance = float(balance) + float(ref_bonus)
-            supabase.table("users").update({"wallet_balance": new_balance, "referral_bonus": 0.00}).eq("phone", identifier).execute()
-            st.success(f"Moved ₦{ref_bonus:,.2f} bonus to your main wallet!")
-            st.rerun()
-
-    # --- REFERRAL REWARDS SECTION ---
-    st.markdown("---")
-    st.markdown("### 🎁 Referral Rewards Program")
-    st.info(f"Share your account identifier (**{identifier}**) with friends! Earn **₦100** free reward bonus for every friend who joins.")
-
-    st.markdown("---")
-    st.markdown("### 🛒 Buy Data & Airtime")
-    
-    choice = st.selectbox("Select Service", ["Data Bundle", "Airtime Top-up"])
-    network = st.selectbox("Select Network", ["MTN", "Glo", "Airtel", "9mobile"])
-    
-    if choice == "Data Bundle":
-        plan_options = {
-            "⚡ FLASH DEAL: 1GB - 30 Days (₦200)": 200,
-            "⚡ FLASH DEAL: 2GB - 30 Days (₦400)": 400,
-            "50MB - 1 Day (₦30)": 30,
-            "100MB - 1 Day (₦50)": 50,
-            "200MB - 2 Days (₦80)": 80,
-            "500MB - 7 Days (₦150)": 150,
-            "750MB - 7 Days (₦200)": 200,
-            "1.5GB - 30 Days (₦380)": 380,
-            "3GB - 30 Days (₦750)": 750,
-            "5GB - 30 Days (₦1,200)": 1200,
-            "10GB - 30 Days (₦2,300)": 2300,
-            "15GB - 30 Days (₦3,400)": 3400,
-            "20GB - 30 Days (₦4,500)": 4500,
-            "30GB - 30 Days (₦6,700)": 6700,
-            "40GB - 30 Days (₦8,900)": 8900,
-            "50GB - 30 Days (₦11,000)": 11000,
-            "75GB - 30 Days (₦16,000)": 16000,
-            "100GB - 30 Days (₦21,000)": 21000,
-            "150GB - 30 Days (₦31,000)": 31000,
-            "200GB - 30 Days (₦40,000)": 40000,
-            "300GB - 30 Days (₦58,000)": 58000,
-            "500GB - 30 Days (₦95,000)": 95000,
-            "1TB (1000GB) - 30 Days (₦180,000)": 180000,
-            "2TB - 30 Days (₦340,000)": 340000,
-            "5TB - 30 Days (₦800,000)": 800000,
-            "UNLIMITED Data - 30 Days (Standard Speed) (₦25,000)": 25000,
-            "UNLIMITED Data - 30 Days (High Speed / 5G) (₦50,000)": 50000
-        }
-        
-        selected_plan = st.selectbox("Select Data Plan", list(plan_options.keys()))
-        cost = plan_options[selected_plan]
-        
-        recipient = st.text_input("Recipient Phone Number", value="")
-        transfer_pin = st.text_input("Enter 4-Digit Transfer PIN", type="password", max_chars=4)
-        st.write(f"Price: **₦{cost:,}**")
-        
-        if st.button("Purchase Data Now", use_container_width=True):
-            if transfer_pin != str(user_pin):
-                st.error("Incorrect 4-Digit Transfer PIN!")
-            elif float(balance) >= cost and recipient.strip():
-                new_balance = float(balance) - cost
-                supabase.table("users").update({"wallet_balance": new_balance}).eq("phone", identifier).execute()
-                
-                supabase.table("transactions").insert({
-                    "phone": identifier,
-                    "service_type": "Data",
-                    "network": network,
-                    "details": f"{selected_plan} -> Sent to {recipient}",
-                    "amount": cost
-                }).execute()
-                
-                st.success(f"Successfully ordered {selected_plan} for {recipient} on {network}!")
-                st.rerun()
-            else:
-                st.error("Please enter a valid recipient phone number or check your wallet balance.")
-            
+        st.success(
+            "Password updated successfully! You can now log in with your new"
+            " password."
+        )
+        # Reset session state
+        st.session_state["token_generated"] = False
+      else:
+        st.error("Invalid or expired recovery code. Please try again.")
     else:
-        amount = st.number_input("Enter Amount (₦)", min_value=50, step=50)
-        recipient = st.text_input("Recipient Phone Number", value="")
-        transfer_pin = st.text_input("Enter 4-Digit Transfer PIN", type="password", max_chars=4)
-        
-        if st.button("Purchase Airtime Now", use_container_width=True):
-            if transfer_pin != str(user_pin):
-                st.error("Incorrect 4-Digit Transfer PIN!")
-            elif float(balance) >= float(amount) and recipient.strip():
-                new_balance = float(balance) - float(amount)
-                supabase.table("users").update({"wallet_balance": new_balance}).eq("phone", identifier).execute()
-                
-                supabase.table("transactions").insert({
-                    "phone": identifier,
-                    "service_type": "Airtime",
-                    "network": network,
-                    "details": f"₦{amount} Airtime -> Sent to {recipient}",
-                    "amount": amount
-                }).execute()
-                
-                st.success(f"Successfully sent ₦{amount} airtime to {recipient} on {network}!")
-                st.rerun()
-            else:
-                st.error("Please enter a valid recipient phone number or check your wallet balance.")
-
-    # --- TRANSACTION HISTORY SECTION ---
-    st.markdown("---")
-    st.markdown("### 📜 Recent Transactions")
-    try:
-        tx_response = supabase.table("transactions").select("*").eq("phone", identifier).order("created_at", desc=True).limit(10).execute()
-        if tx_response.data:
-            for tx in tx_response.data:
-                st.markdown(f"- **{tx['service_type']}** | {tx['network']} - {tx['details']} | **₦{tx['amount']:,.2f}**")
-        else:
-            st.info("No transaction history yet.")
-    except Exception as e:
-        st.write("Could not load transaction history.")
-
-    st.markdown("---")
-    if st.button("Log Out", use_container_width=True):
-        st.session_state.logged_in = False
-        st.session_state.identifier = ""
-        st.rerun()
+      st.error("An error occurred. Please restart the reset process.")
