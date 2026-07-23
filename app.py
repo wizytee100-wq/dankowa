@@ -70,6 +70,7 @@ if not st.session_state["logged_in"]:
     new_user = st.text_input("Choose Username")
     new_phone = st.text_input("Phone Number")
     new_pass = st.text_input("Choose Password", type="password")
+    referred_by = st.text_input("Referrer Username (Optional)")
 
     if st.button("Register Account"):
       if new_user and new_phone and new_pass:
@@ -140,11 +141,11 @@ if not st.session_state["logged_in"]:
 
 # --- MAIN APP INTERFACE (ONLY SHOWN AFTER SUCCESSFUL LOGIN) ---
 else:
+  current_user = st.session_state.get("username", "User")
+
   # Sidebar for Wallet Management & Logout
   st.sidebar.title("💰 Wallet Hub")
-  st.sidebar.success(
-      f"Logged in as: **{st.session_state.get('username', 'User')}**"
-  )
+  st.sidebar.success(f"Logged in as: **{current_user}**")
   if st.sidebar.button("Log Out"):
     st.session_state["logged_in"] = False
     st.rerun()
@@ -178,139 +179,165 @@ else:
     st.sidebar.success(f"Wallet credited with ₦{funding_amount:,.2f}!")
     st.rerun()
 
-  # Main Dashboard Content
-  st.title("📱 Dankowa Data & Airtime Hub")
-  st.write(
-      "Welcome back! Buy cheap SME data and airtime instantly with automated"
-      " delivery."
-  )
+  # Main Dashboard Content Selection (User Dashboard vs Admin Panel)
+  app_mode = "User Dashboard"
+  if current_user.lower() in ["admin", "dankowa", "ytee"]:
+    app_mode = st.radio("Navigation View", ["User Dashboard", "Admin Panel"])
 
-  # Referral Banner / Invite Feature
-  st.info(
-      "🎁 **Refer & Earn:** Share your username **"
-      f"{st.session_state.get('username', 'User')}** with friends and get ₦100"
-      " bonus when they fund their wallet!"
-  )
-
-  # Statistics Summary Section
-  total_spent = sum(tx["cost"] for tx in st.session_state.transactions)
-  total_purchases = len(st.session_state.transactions)
-  col1, col2 = st.columns(2)
-  col1.metric("Total Spent", f"₦{total_spent:,.2f}")
-  col2.metric("Total Orders", total_purchases)
-  st.markdown("---")
-
-  network = st.selectbox(
-      "Select Network Provider",
-      ["MTN", "Airtel", "Glo", "9mobile", "Smile 4G", "Spectranet"],
-  )
-  service_type = st.radio("Select Service", ["Data Bundle", "Airtime Top-up"])
-
-  # Comprehensive Data Plan List (MB -> GB -> TB -> Unlimited)
-  prices = {
-      "100MB (1 Day) - ₦50": 50,
-      "200MB (3 Days) - ₦90": 90,
-      "500MB (7 Days) - ₦130": 130,
-      "1GB (30 Days) - ₦250": 250,
-      "2GB (30 Days) - ₦500": 500,
-      "3GB (30 Days) - ₦750": 750,
-      "5GB (30 Days) - ₦1,200": 1200,
-      "10GB (30 Days) - ₦2,300": 2300,
-      "20GB (30 Days) - ₦4,500": 4500,
-      "40GB (Monthly Mega) - ₦8,500": 8500,
-      "50GB (TB Tier) - ₦10,500": 10500,
-      "100GB (TB Tier) - ₦20,000": 20000,
-      "200GB (TB Tier) - ₦38,000": 38000,
-      "500GB (Heavy Duty TB) - ₦90,000": 90000,
-      "1TB (Enterprise Terabyte) - ₦175,000": 175000,
-      "Unlimited Plan (1 Month) - ₦45,000": 45000,
-  }
-
-  cost = 0
-  plan = ""
-
-  if service_type == "Data Bundle":
-    plan = st.selectbox("Select Data Plan", list(prices.keys()))
-    cost = prices[plan]
-    st.info(f"Price: ₦{cost:,}")
-  else:
-    cost = st.number_input(
-        "Enter Airtime Amount (₦)", min_value=50, max_value=10000, step=50
+  if app_mode == "Admin Panel":
+    st.title("🛠️ Admin Control Panel")
+    st.write(
+        "Welcome, Admin! Here you can monitor registered user accounts and"
+        " platform statistics."
     )
 
-  phone_number = st.text_input("Enter Phone Number", max_chars=11)
-
-  if st.button("Proceed with Transaction"):
-    if len(phone_number) == 11:
-      if st.session_state.wallet_balance >= cost:
-        st.session_state.wallet_balance -= cost
-
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        tx_ref = f"DNK-{random.randint(10000000, 99999999)}"
-        details = (
-            f"{plan}" if service_type == "Data Bundle" else f"₦{cost} Airtime"
-        )
-        transaction_record = {
-            "ref": tx_ref,
-            "time": current_time,
-            "network": network,
-            "type": service_type,
-            "details": details,
-            "phone": phone_number,
-            "cost": cost,
-        }
-        st.session_state.transactions.insert(0, transaction_record)
-
-        st.success(
-            f"Transaction successful! {service_type} sent to {phone_number}."
-        )
+    try:
+      db_users = supabase.table("profiles").select("*").execute().data
+      st.metric("Total Registered Users", len(db_users))
+      st.subheader("📋 Registered Users List")
+      if db_users:
+        for u in db_users:
+          st.text(
+              f"User: {u.get('username')} | Phone: {u.get('phone')} | Created:"
+              f" {u.get('created_at', 'N/A')}"
+          )
       else:
-        st.error(
-            "Insufficient wallet funds! Please fund your wallet via bank"
-            " transfer from the sidebar."
-        )
-    else:
-      st.error("Please enter a valid 11-digit phone number.")
+        st.write("No users found in database.")
+    except Exception as e:
+      st.error(f"Could not load users: {e}")
 
-  st.markdown("---")
-  st.subheader("📜 Recent Transaction History & Receipts")
-
-  if len(st.session_state.transactions) > 0:
-    for idx, tx in enumerate(st.session_state.transactions):
-      with st.container():
-        st.write(
-            f"**{idx+1}. [{tx['time']}] {tx['network']} - {tx['type']}**"
-        )
-        st.text(
-            f"Ref: {tx['ref']} | Details: {tx['details']} | Phone:"
-            f" {tx['phone']} | Cost: ₦{tx['cost']:,}"
-        )
-
-        # Downloadable text receipt for each transaction
-        receipt_text = (
-            "===================================\n"
-            "       DANKOWA DATA & AIRTIME HUB  \n"
-            "          OFFICIAL RECEIPT         \n"
-            "===================================\n"
-            f"Reference ID : {tx['ref']}\n"
-            f"Date & Time  : {tx['time']}\n"
-            f"Network      : {tx['network']}\n"
-            f"Service Type : {tx['type']}\n"
-            f"Item Details : {tx['details']}\n"
-            f"Phone Number : {tx['phone']}\n"
-            f"Total Paid   : ₦{tx['cost']:,}\n"
-            f"Status       : SUCCESSFUL\n"
-            "===================================\n"
-            "     Thank you for choosing us!    \n"
-            "==================================="
-        )
-        st.download_button(
-            label=f"📥 Download Receipt ({tx['ref']})",
-            data=receipt_text,
-            file_name=f"Receipt_{tx['ref']}.txt",
-            mime="text/plain",
-            key=f"receipt_{tx['ref']}",
-        )
-        st.markdown("---")
   else:
-    st.write("No transactions recorded yet.")
+    st.title("📱 Dankowa Data & Airtime Hub")
+    st.write(
+        "Welcome back! Buy cheap SME data and airtime instantly with automated"
+        " delivery."
+    )
+
+    # Referral Banner / Invite Feature
+    st.info(
+        "🎁 **Refer & Earn:** Share your username **"
+        f"{current_user}** with friends and get ₦100 bonus when they fund"
+        " their wallet!"
+    )
+
+    # Statistics Summary Section
+    total_spent = sum(tx["cost"] for tx in st.session_state.transactions)
+    total_purchases = len(st.session_state.transactions)
+    col1, col2 = st.columns(2)
+    col1.metric("Total Spent", f"₦{total_spent:,.2f}")
+    col2.metric("Total Orders", total_purchases)
+    st.markdown("---")
+
+    network = st.selectbox(
+        "Select Network Provider",
+        ["MTN", "Airtel", "Glo", "9mobile", "Smile 4G", "Spectranet"],
+    )
+    service_type = st.radio("Select Service", ["Data Bundle", "Airtime Top-up"])
+
+    # Comprehensive Data Plan List (MB -> GB -> TB -> Unlimited)
+    prices = {
+        "100MB (1 Day) - ₦50": 50,
+        "200MB (3 Days) - ₦90": 90,
+        "500MB (7 Days) - ₦130": 130,
+        "1GB (30 Days) - ₦250": 250,
+        "2GB (30 Days) - ₦500": 500,
+        "3GB (30 Days) - ₦750": 750,
+        "5GB (30 Days) - ₦1,200": 1200,
+        "10GB (30 Days) - ₦2,300": 2300,
+        "20GB (30 Days) - ₦4,500": 4500,
+        "40GB (Monthly Mega) - ₦8,500": 8500,
+        "50GB (TB Tier) - ₦10,500": 10500,
+        "100GB (TB Tier) - ₦20,000": 20000,
+        "200GB (TB Tier) - ₦38,000": 38000,
+        "500GB (Heavy Duty TB) - ₦90,000": 90000,
+        "1TB (Enterprise Terabyte) - ₦175,000": 175000,
+        "Unlimited Plan (1 Month) - ₦45,000": 45000,
+    }
+
+    cost = 0
+    plan = ""
+
+    if service_type == "Data Bundle":
+      plan = st.selectbox("Select Data Plan", list(prices.keys()))
+      cost = prices[plan]
+      st.info(f"Price: ₦{cost:,}")
+    else:
+      cost = st.number_input(
+          "Enter Airtime Amount (₦)", min_value=50, max_value=10000, step=50
+      )
+
+    phone_number = st.text_input("Enter Phone Number", max_chars=11)
+
+    if st.button("Proceed with Transaction"):
+      if len(phone_number) == 11:
+        if st.session_state.wallet_balance >= cost:
+          st.session_state.wallet_balance -= cost
+
+          current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+          tx_ref = f"DNK-{random.randint(10000000, 99999999)}"
+          details = (
+              f"{plan}" if service_type == "Data Bundle" else f"₦{cost} Airtime"
+          )
+          transaction_record = {
+              "ref": tx_ref,
+              "time": current_time,
+              "network": network,
+              "type": service_type,
+              "details": details,
+              "phone": phone_number,
+              "cost": cost,
+          }
+          st.session_state.transactions.insert(0, transaction_record)
+
+          st.success(
+              f"Transaction successful! {service_type} sent to {phone_number}."
+          )
+        else:
+          st.error(
+              "Insufficient wallet funds! Please fund your wallet via bank"
+              " transfer from the sidebar."
+          )
+      else:
+        st.error("Please enter a valid 11-digit phone number.")
+
+    st.markdown("---")
+    st.subheader("📜 Recent Transaction History & Receipts")
+
+    if len(st.session_state.transactions) > 0:
+      for idx, tx in enumerate(st.session_state.transactions):
+        with st.container():
+          st.write(
+              f"**{idx+1}. [{tx['time']}] {tx['network']} - {tx['type']}**"
+          )
+          st.text(
+              f"Ref: {tx['ref']} | Details: {tx['details']} | Phone:"
+              f" {tx['phone']} | Cost: ₦{tx['cost']:,}"
+          )
+
+          receipt_text = (
+              "===================================\n"
+              "       DANKOWA DATA & AIRTIME HUB  \n"
+              "          OFFICIAL RECEIPT         \n"
+              "===================================\n"
+              f"Reference ID : {tx['ref']}\n"
+              f"Date & Time  : {tx['time']}\n"
+              f"Network      : {tx['network']}\n"
+              f"Service Type : {tx['type']}\n"
+              f"Item Details : {tx['details']}\n"
+              f"Phone Number : {tx['phone']}\n"
+              f"Total Paid   : ₦{tx['cost']:,}\n"
+              f"Status       : SUCCESSFUL\n"
+              "===================================\n"
+              "     Thank you for choosing us!    \n"
+              "==================================="
+          )
+          st.download_button(
+              label=f"📥 Download Receipt ({tx['ref']})",
+              data=receipt_text,
+              file_name=f"Receipt_{tx['ref']}.txt",
+              mime="text/plain",
+              key=f"receipt_{tx['ref']}",
+          )
+          st.markdown("---")
+    else:
+      st.write("No transactions recorded yet.")
